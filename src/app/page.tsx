@@ -1,7 +1,7 @@
 "use client"
 
 import type { Session } from "@supabase/supabase-js"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import {
   buttonClass,
   inputClass,
@@ -10,11 +10,15 @@ import {
 } from "@/components/website-manager/styles"
 import { supabase } from "@/lib/supabase"
 import { Requests } from "@/components/website-manager/requests"
+import { Turnstile, type TurnstileInstance } from "@marsidev/react-turnstile"
 
+const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY
 export default function WebsiteManagerPage() {
   const [session, setSession] = useState<Session | null | undefined>(undefined)
   const [error, setError] = useState("")
   const [busy, setBusy] = useState(false)
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null)
+  const turnstileRef = useRef<TurnstileInstance | null>(null)
 
   useEffect(() => {
     const {
@@ -28,7 +32,7 @@ export default function WebsiteManagerPage() {
 
   async function signIn(event: React.ChangeEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (busy) return
+    if (busy || (turnstileSiteKey && !captchaToken)) return
 
     const fields = new FormData(event.currentTarget)
     setError("")
@@ -38,12 +42,15 @@ export default function WebsiteManagerPage() {
       const { error } = await supabase.auth.signInWithPassword({
         email: String(fields.get("email") ?? "").trim(),
         password: String(fields.get("password") ?? ""),
+        options: captchaToken ? { captchaToken } : undefined,
       })
 
       if (error) setError(error.message)
     } catch {
       setError("Could not sign in. Check your connection and try again.")
     } finally {
+      setCaptchaToken(null)
+      turnstileRef.current?.reset()
       setBusy(false)
     }
   }
@@ -113,13 +120,31 @@ export default function WebsiteManagerPage() {
                 />
               </label>
 
+              {turnstileSiteKey && (
+                <Turnstile
+                  ref={turnstileRef}
+                  siteKey={turnstileSiteKey}
+                  onSuccess={(token) => setCaptchaToken(token)}
+                  onExpire={() => setCaptchaToken(null)}
+                  onError={() => {
+                    setCaptchaToken(null)
+                    setError(
+                      "CAPTCHA could not load. Refresh the page and try again.",
+                    )
+                  }}
+                />
+              )}
+
               {error && (
                 <p role="alert" className="text-sm text-red-300">
                   {error}
                 </p>
               )}
 
-              <button type="submit" disabled={busy} className={buttonClass}>
+              <button
+                type="submit"
+                disabled={busy || Boolean(turnstileSiteKey && !captchaToken)}
+                className={buttonClass}>
                 {busy ? "Signing in…" : "Sign in"}
               </button>
             </form>
