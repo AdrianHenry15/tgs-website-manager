@@ -177,20 +177,7 @@ export default function WebsiteManagerPage() {
         <div className="mx-auto w-full max-w-7xl px-5 py-8 sm:py-12">
           <header className="mb-8 flex flex-wrap items-center justify-between gap-4 border-b border-stone-800 pb-5">
             <Brand />
-            <nav
-              aria-label="Legal"
-              className="flex flex-wrap items-center gap-4">
-              <Link
-                href="/privacy"
-                className="rounded-sm text-sm text-stone-300 underline-offset-4 hover:text-orange-200 hover:underline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-orange-400">
-                Privacy
-              </Link>
-              <Link
-                href="/terms"
-                className="rounded-sm text-sm text-stone-300 underline-offset-4 hover:text-orange-200 hover:underline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-orange-400">
-                Terms of use
-              </Link>
-            </nav>
+
             <button
               type="button"
               onClick={() => void signOut()}
