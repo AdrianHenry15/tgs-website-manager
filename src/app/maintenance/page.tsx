@@ -15,6 +15,10 @@ const inquiryHref =
 
 const allowIndexing = process.env.VERCEL_ENV === "production"
 
+const showTestCheckout =
+  process.env.VERCEL_ENV !== "production" &&
+  process.env.WM_STRIPE_TEST_CHECKOUT_ENABLED === "true"
+
 export const metadata: Metadata = {
   title: "Website Maintenance",
   description,
@@ -77,9 +81,19 @@ export default function MaintenancePage() {
             progress, and what we’ve completed.
           </p>
 
-          <a href={inquiryHref} className={`${buttonClass} mt-8 inline-flex`}>
-            Ask about maintenance
-          </a>
+          <div className="mt-8 flex flex-wrap gap-3">
+            <a href={inquiryHref} className={`${buttonClass} inline-flex`}>
+              Ask about maintenance
+            </a>
+
+            {showTestCheckout && (
+              <form action="/api/maintenance/checkout" method="post">
+                <button type="submit" className={secondaryButtonClass}>
+                  Test subscription checkout
+                </button>
+              </form>
+            )}
+          </div>
         </section>
 
         <section

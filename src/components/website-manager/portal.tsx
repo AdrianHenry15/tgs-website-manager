@@ -9,6 +9,7 @@ import { Requests } from "./requests/requests"
 import { AccountSettings } from "./account-settings"
 import { Brand } from "./auth-ui"
 import { RemoveWebsiteAccess } from "./remove-website-access"
+import { WebsiteBilling } from "./website-billing"
 
 export function Portal() {
   const [session, setSession] = useState<Session | null | undefined>(undefined)
@@ -111,6 +112,7 @@ function Workspace({ user }: { user: Session["user"] }) {
       {accountOpen && (
         <div className="mb-6 space-y-4">
           <AccountSettings email={user.email ?? ""} />
+          <WebsiteBilling />
           <RemoveWebsiteAccess />
         </div>
       )}
