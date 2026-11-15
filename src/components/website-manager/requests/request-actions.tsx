@@ -2,7 +2,7 @@
 
 import { useState, type FormEvent } from "react"
 import { supabase } from "@/lib/supabase"
-import { buttonClass, inputClass, labelClass } from "./styles"
+import { buttonClass, inputClass, labelClass } from "../styles"
 
 type RequestActionRecord = {
   id: string

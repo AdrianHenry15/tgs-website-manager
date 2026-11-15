@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react"
 import { supabase } from "@/lib/supabase"
-import { buttonClass, inputClass, labelClass } from "./styles"
+import { buttonClass } from "../styles"
 
 const bucket = supabase.storage.from("wm-request-screenshots")
 const fileName = "screenshot"

@@ -11,6 +11,7 @@ import {
   panelClass,
 } from "./styles"
 import { Brand, PasswordField } from "./auth-ui"
+import Link from "next/link"
 
 const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY
 
@@ -269,6 +270,13 @@ export function AuthScreen({ screen, recoveryReady }: AuthScreenProps) {
           <p role="alert" className="mt-4 text-sm text-red-300">
             {error}
           </p>
+        )}
+        {screen === "sign-in" && !forgot && (
+          <div className="mt-6 border-t border-stone-800 pt-4">
+            <Link href="/maintenance" className={linkButtonClass}>
+              Explore website maintenance
+            </Link>
+          </div>
         )}
       </section>
     </div>
