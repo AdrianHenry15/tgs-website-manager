@@ -5,10 +5,8 @@ import { supabase } from "@/lib/supabase"
 import { RequestActions } from "./request-actions"
 import { RequestScreenshot } from "./request-screenshot"
 import { RequestUpdates } from "./request-updates"
-import { buttonClass, inputClass, labelClass, panelClass } from "./styles"
-
-const requestColumns =
-  "id, website_id, submitted_by, kind, title, description, page_url, status, deleted_at, deleted_by, purge_started_at"
+import { requestColumns } from "./request-columns"
+import { buttonClass, inputClass, labelClass, panelClass } from "../styles"
 
 const requestStatuses = [
   { value: "received", label: "Received" },
@@ -160,6 +158,7 @@ export function Requests({ viewerId }: { viewerId: string }) {
     const title = String(fields.get("title") ?? "").trim()
     const description = String(fields.get("description") ?? "").trim()
     const websiteId = String(fields.get("websiteId") ?? "")
+    const pageUrl = String(fields.get("pageUrl") ?? "").trim()
     const kind = fields.get("kind")
 
     setActionError("")
@@ -178,29 +177,50 @@ export function Requests({ viewerId }: { viewerId: string }) {
     setSaving(true)
 
     try {
-      const { data, error } = await supabase
-        .from("wm_requests")
-        .insert({
-          website_id: websiteId,
-          kind,
-          title,
-          description,
-          page_url: String(fields.get("pageUrl") ?? "").trim() || null,
-        })
-        .select(requestColumns)
-        .single()
+      const { data, error: sessionError } = await supabase.auth.getSession()
+      const token = data.session?.access_token
 
-      if (error) {
-        setActionError(error.message)
+      if (sessionError || !token) {
+        setActionError("Sign in again to submit a request.")
         return
       }
 
-      setRequests((current) => [data, ...current])
+      const response = await fetch("/api/requests", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ websiteId, kind, title, description, pageUrl }),
+      })
+
+      const result = (await response.json()) as {
+        request?: WebsiteRequest
+        emailStatus?: "accepted" | "disabled" | "unconfirmed"
+        error?: string
+      }
+
+      if (!response.ok || !result.request) {
+        setActionError(
+          result.error ??
+            "Could not confirm the save. Refresh before submitting again.",
+        )
+        return
+      }
+
+      const savedRequest = result.request
+
+      setRequests((current) => [savedRequest, ...current])
       setView("open")
       setKindFilter("all")
       form.reset()
+
+      const screenshotHint = "Open Screenshot on the ticket to attach an image."
+
       setNotice(
-        "Request submitted. Open Screenshot on the ticket to attach an image.",
+        result.emailStatus === "unconfirmed"
+          ? `Request saved. We couldn’t confirm the notification emails. ${screenshotHint}`
+          : `Request submitted. ${screenshotHint}`,
       )
     } catch {
       setActionError(

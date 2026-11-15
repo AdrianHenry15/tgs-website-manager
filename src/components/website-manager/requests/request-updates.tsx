@@ -1,6 +1,6 @@
-import { useEffect, useState, type FormEvent } from "react"
+import { useEffect, useState } from "react"
 import { supabase } from "@/lib/supabase"
-import { buttonClass, inputClass, labelClass } from "./styles"
+import { buttonClass, inputClass, labelClass } from "../styles"
 
 const updateColumns = "id, body, created_at"
 
@@ -21,6 +21,7 @@ export function RequestUpdates({
   const [updates, setUpdates] = useState<RequestUpdate[] | null>(null)
   const [loadError, setLoadError] = useState("")
   const [postError, setPostError] = useState("")
+  const [postNotice, setPostNotice] = useState("")
   const [posting, setPosting] = useState(false)
 
   useEffect(() => {
@@ -55,40 +56,70 @@ export function RequestUpdates({
     }
   }, [open, requestId])
 
-  async function postUpdate(event: FormEvent<HTMLFormElement>) {
+  async function postUpdate(event: React.ChangeEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!canPost || posting || updates === null || loadError) return
 
     const form = event.currentTarget
     const body = String(new FormData(form).get("body") ?? "").trim()
 
+    setPostError("")
+    setPostNotice("")
+
     if (!body) {
       setPostError("Enter an update before posting.")
       return
     }
 
-    setPostError("")
     setPosting(true)
 
     try {
-      const { data, error } = await supabase
-        .from("wm_request_updates")
-        .insert({ request_id: requestId, body })
-        .select(updateColumns)
-        .single()
+      const { data, error: sessionError } = await supabase.auth.getSession()
+      const token = data.session?.access_token
 
-      if (error) {
-        setPostError(error.message)
+      if (sessionError || !token) {
+        setPostError("Sign in again to post an update.")
         return
       }
 
+      const response = await fetch("/api/requests/updates", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ requestId, body }),
+      })
+
+      const result = (await response.json()) as {
+        update?: RequestUpdate
+        emailStatus?: "accepted" | "disabled" | "unconfirmed" | "skipped"
+        error?: string
+      }
+
+      if (!response.ok || !result.update) {
+        setPostError(
+          result.error ??
+            "Could not confirm the save. Reopen updates before retrying.",
+        )
+        return
+      }
+
+      const update = result.update
+
       setUpdates((current) =>
         [
-          data,
-          ...(current ?? []).filter((update) => update.id !== data.id),
+          update,
+          ...(current ?? []).filter((item) => item.id !== update.id),
         ].slice(0, 50),
       )
+
       form.reset()
+      setPostNotice(
+        result.emailStatus === "unconfirmed"
+          ? "Update posted. We couldn’t confirm the client email."
+          : "Update posted.",
+      )
     } catch {
       setPostError(
         "Could not confirm the save. Reopen updates before retrying.",
@@ -156,6 +187,12 @@ export function RequestUpdates({
             {postError && (
               <p role="alert" className="text-red-300">
                 {postError}
+              </p>
+            )}
+
+            {postNotice && (
+              <p role="status" className="text-sm text-stone-300">
+                {postNotice}
               </p>
             )}
 
