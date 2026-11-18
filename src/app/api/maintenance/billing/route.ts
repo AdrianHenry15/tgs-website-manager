@@ -1,7 +1,9 @@
 import { createClient } from "@supabase/supabase-js"
 import Stripe from "stripe"
-
-export const runtime = "nodejs"
+import {
+  getStripeMode,
+  isStripeKeyForMode,
+} from "@/lib/website-manager/stripe-mode"
 
 const authOptions = {
   persistSession: false,
@@ -14,10 +16,9 @@ const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 async function getBillingContext(request: Request) {
-  if (
-    process.env.VERCEL_ENV === "production" ||
-    process.env.WM_STRIPE_TEST_CHECKOUT_ENABLED !== "true"
-  ) {
+  const mode = getStripeMode()
+
+  if (!mode) {
     return new Response(null, { status: 404, headers: noStore })
   }
 
@@ -41,10 +42,9 @@ async function getBillingContext(request: Request) {
     !url ||
     !publishableKey ||
     !supabaseSecret ||
-    !stripeKey ||
-    !/^(sk|rk)_test_/.test(stripeKey)
+    !isStripeKeyForMode(stripeKey, mode)
   ) {
-    return new Response("Test billing is not configured.", { status: 503 })
+    return new Response("Stripe billing is not configured.", { status: 503 })
   }
 
   const viewer = createClient(url, publishableKey, {
@@ -59,6 +59,7 @@ async function getBillingContext(request: Request) {
   }
 
   return {
+    mode,
     userId: data.user.id,
     viewer,
     admin: createClient(url, supabaseSecret, { auth: authOptions }),
@@ -66,11 +67,15 @@ async function getBillingContext(request: Request) {
   }
 }
 
-async function getWebsiteSubscription(stripe: Stripe, subscriptionId: string) {
+async function getWebsiteSubscription(
+  stripe: Stripe,
+  subscriptionId: string,
+  livemode: boolean,
+) {
   const subscription = await stripe.subscriptions.retrieve(subscriptionId)
 
   if (
-    subscription.livemode ||
+    subscription.livemode !== livemode ||
     subscription.metadata.source !== "tgs_website_manager"
   ) {
     return null
@@ -84,12 +89,11 @@ async function getWebsiteSubscription(stripe: Stripe, subscriptionId: string) {
         : subscription.customer.id,
   }
 }
-
 export async function GET(request: Request) {
   const context = await getBillingContext(request)
   if (context instanceof Response) return context
 
-  const { viewer, admin, stripe, userId } = context
+  const { viewer, admin, stripe, userId, mode } = context
 
   const { data: websites, error: websitesError } = await viewer
     .from("wm_websites")
@@ -101,7 +105,7 @@ export async function GET(request: Request) {
   }
 
   if (websites.length === 0) {
-    return Response.json({ billing: [] }, { headers: noStore })
+    return Response.json({ billing: [], mode }, { headers: noStore })
   }
 
   const [linksResult, contactsResult] = await Promise.all([
@@ -143,6 +147,7 @@ export async function GET(request: Request) {
           const subscription = await getWebsiteSubscription(
             stripe,
             subscriptionId,
+            mode === "live",
           ).catch(() => null)
 
           return {
@@ -158,14 +163,14 @@ export async function GET(request: Request) {
     }),
   )
 
-  return Response.json({ billing }, { headers: noStore })
+  return Response.json({ billing, mode }, { headers: noStore })
 }
 
 export async function POST(request: Request) {
   const context = await getBillingContext(request)
   if (context instanceof Response) return context
 
-  const { viewer, admin, stripe, userId } = context
+  const { viewer, admin, stripe, userId, mode } = context
   const payload = (await request.json().catch(() => null)) as {
     websiteId?: unknown
   } | null
@@ -218,6 +223,7 @@ export async function POST(request: Request) {
     const subscription = await getWebsiteSubscription(
       stripe,
       link.stripe_subscription_id,
+      mode === "live",
     )
 
     if (!subscription) {

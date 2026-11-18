@@ -1,5 +1,5 @@
 import {
-  RequestEmailStatus,
+  notifyRequestClient,
   sendRequestUpdateEmail,
 } from "@/components/website-manager/requests/request-email"
 import { createClient } from "@supabase/supabase-js"
@@ -118,70 +118,24 @@ export async function POST(request: Request) {
     )
   }
 
-  const emailStatus =
-    ticket.submitted_by && ticket.submitted_by !== auth.user.id
-      ? await notifyRequester(ticket.submitted_by, ticket.website_id, update.id)
-      : "skipped"
+  const emailStatus = await notifyRequestClient({
+    requesterId: ticket.submitted_by,
+    websiteId: ticket.website_id,
+    actorId: auth.user.id,
+    send: (clientEmail) =>
+      sendRequestUpdateEmail({
+        requestId,
+        updateId: update.id,
+        clientEmail,
+      }),
+  })
+
+  console.info("Request update notification", {
+    requestId,
+    emailStatus,
+    hasRequester: Boolean(ticket.submitted_by),
+    requesterIsCurrentUser: ticket.submitted_by === auth.user.id,
+  })
 
   return Response.json({ update, emailStatus }, { status: 201 })
-}
-
-async function notifyRequester(
-  requesterId: string,
-  websiteId: string,
-  updateId: string,
-): Promise<RequestEmailStatus | "skipped"> {
-  const secretKey = process.env.WM_SUPABASE_SECRET_KEY
-
-  if (!secretKey) {
-    console.error("Request update email requires WM_SUPABASE_SECRET_KEY", {
-      updateId,
-    })
-    return "unconfirmed"
-  }
-
-  try {
-    const admin = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      secretKey,
-      { auth: serverAuthOptions },
-    )
-
-    const { data: membership, error: membershipError } = await admin
-      .from("wm_website_members")
-      .select("user_id")
-      .eq("website_id", websiteId)
-      .eq("user_id", requesterId)
-      .maybeSingle()
-
-    if (membershipError) {
-      console.error("Could not verify requester’s website assignment", {
-        updateId,
-        code: membershipError.code,
-      })
-      return "unconfirmed"
-    }
-
-    if (!membership) return "skipped"
-
-    const { data, error } = await admin.auth.admin.getUserById(requesterId)
-
-    if (error) {
-      console.error("Could not look up request update recipient", {
-        updateId,
-        status: error.status,
-      })
-      return "unconfirmed"
-    }
-
-    if (!data.user?.email) return "skipped"
-
-    return await sendRequestUpdateEmail({
-      updateId,
-      clientEmail: data.user.email,
-    })
-  } catch {
-    console.error("Could not confirm request update notification", { updateId })
-    return "unconfirmed"
-  }
 }

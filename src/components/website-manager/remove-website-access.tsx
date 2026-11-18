@@ -55,6 +55,17 @@ export function RemoveWebsiteAccess() {
             Contact TGS if you need access restored.
           </p>
 
+          <p className="text-sm text-stone-400">
+            Removing portal access leaves your maintenance subscription active.
+            To request cancellation, email{" "}
+            <a
+              href="mailto:ahenry@thirdgenerationstudios.com?subject=Maintenance%20cancellation"
+              className="text-orange-300 underline underline-offset-4">
+              ahenry@thirdgenerationstudios.com
+            </a>
+            .
+          </p>
+
           <div className="flex flex-wrap gap-2">
             <button
               type="button"

@@ -10,7 +10,7 @@ export const buttonClass =
   "rounded-xl bg-orange-500 px-4 py-2.5 text-sm font-semibold text-stone-950 transition-colors hover:bg-orange-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-400 disabled:cursor-not-allowed disabled:opacity-50"
 
 export const secondaryButtonClass =
-  "rounded-xl border border-stone-700 px-4 py-2.5 text-sm font-medium text-stone-200 transition-colors hover:border-orange-400 hover:text-orange-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-400 disabled:opacity-50"
+  "cursor-pointer rounded-xl border border-stone-700 px-4 py-2.5 text-sm font-medium text-stone-200 transition-colors hover:border-orange-400 hover:text-orange-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-400 disabled:opacity-50"
 
 export const linkButtonClass =
   "w-fit text-sm font-medium text-orange-300 underline-offset-4 hover:text-orange-200 hover:underline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-orange-400 disabled:opacity-50"

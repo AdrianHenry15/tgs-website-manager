@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, type FormEvent, type ReactNode } from "react"
+import { useEffect, useState, useRef, type ReactNode } from "react"
 import { supabase } from "@/lib/supabase"
 import { RequestActions } from "./request-actions"
 import { RequestScreenshot } from "./request-screenshot"
@@ -94,6 +94,7 @@ export function Requests({ viewerId }: { viewerId: string }) {
   const [loadError, setLoadError] = useState("")
   const [actionError, setActionError] = useState("")
   const [notice, setNotice] = useState("")
+  const [linkedRequestId, setLinkedRequestId] = useState<string | null>(null)
 
   useEffect(() => {
     let active = true
@@ -118,6 +119,25 @@ export function Requests({ viewerId }: { viewerId: string }) {
 
         setWebsites(sites.data ?? [])
         setRequests(tickets.data ?? [])
+
+        const requestedId = new URLSearchParams(window.location.search).get(
+          "request",
+        )
+
+        if (requestedId && !tickets.error) {
+          const linkedRequest = tickets.data?.find(
+            (request) => request.id === requestedId,
+          )
+
+          if (linkedRequest) {
+            setLinkedRequestId(linkedRequest.id)
+            setView(linkedRequest.deleted_at === null ? "all" : "trash")
+            setKindFilter("all")
+          } else {
+            setNotice("The linked request is unavailable to this account.")
+          }
+        }
+
         setManagedWebsiteIds(
           (managedSites.data ?? []).map(
             (site: WebsiteIdRow) => site.website_id,
@@ -149,7 +169,7 @@ export function Requests({ viewerId }: { viewerId: string }) {
     }
   }, [])
 
-  async function submitRequest(event: FormEvent<HTMLFormElement>) {
+  async function submitRequest(event: React.ChangeEvent<HTMLFormElement>) {
     event.preventDefault()
     if (saving) return
 
@@ -234,37 +254,69 @@ export function Requests({ viewerId }: { viewerId: string }) {
   async function changeStatus(requestId: string, status: string) {
     if (updatingRequestId !== null) return
 
+    const previous = requests.find((request) => request.id === requestId)
+    if (!previous || previous.status === status) return
+
     setActionError("")
     setNotice("")
     setUpdatingRequestId(requestId)
 
     try {
-      const { data, error } = await supabase
-        .from("wm_requests")
-        .update({ status })
-        .eq("id", requestId)
-        .is("deleted_at", null)
-        .select(requestColumns)
-        .maybeSingle()
+      const { data, error: sessionError } = await supabase.auth.getSession()
+      const token = data.session?.access_token
 
-      if (error) {
-        setActionError(error.message)
+      if (sessionError || !token) {
+        setActionError("Sign in again to change a request status.")
         return
       }
 
-      if (!data) {
-        setActionError("No request was updated. Refresh and check your access.")
+      const response = await fetch("/api/requests/status", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          requestId,
+          status,
+          expectedStatus: previous.status,
+        }),
+      })
+
+      const result = (await response.json()) as {
+        request?: WebsiteRequest
+        emailStatus?: "accepted" | "disabled" | "unconfirmed" | "skipped"
+        error?: string
+      }
+
+      if (!response.ok || !result.request) {
+        setActionError(
+          result.error ??
+            "Could not confirm the status change. Refresh to check it.",
+        )
         return
       }
+
+      const updated = result.request
 
       setRequests((current) =>
-        current.map((request) => (request.id === data.id ? data : request)),
+        current.map((request) =>
+          request.id === updated.id ? updated : request,
+        ),
       )
 
       const label = requestStatuses.find(
-        ({ value }) => value === data.status,
+        ({ value }) => value === updated.status,
       )?.label
-      setNotice(`Status updated to ${label ?? data.status}.`)
+
+      const emailNotice =
+        result.emailStatus === "unconfirmed"
+          ? " We couldn’t confirm the client email."
+          : result.emailStatus === "disabled"
+            ? " Email notifications are not configured."
+            : ""
+
+      setNotice(`Status updated to ${label ?? updated.status}.${emailNotice}`)
     } catch {
       setActionError(
         "Could not confirm the status change. Refresh to check it.",
@@ -507,6 +559,7 @@ export function Requests({ viewerId }: { viewerId: string }) {
                   canUpload={
                     isActive && (canManage || request.submitted_by === viewerId)
                   }
+                  linked={request.id === linkedRequestId}
                   updatingStatus={updatingRequestId !== null}
                   onStatusChange={(status) =>
                     void changeStatus(request.id, status)
@@ -545,6 +598,7 @@ function RequestCard({
   updatingStatus,
   onStatusChange,
   actions,
+  linked,
 }: {
   request: WebsiteRequest
   websiteName?: string
@@ -553,13 +607,35 @@ function RequestCard({
   updatingStatus: boolean
   onStatusChange: (status: string) => void
   actions: ReactNode
+  linked: boolean
 }) {
   const statusLabel =
     requestStatuses.find(({ value }) => value === request.status)?.label ??
     request.status
 
+  const cardRef = useRef<HTMLLIElement>(null)
+
+  useEffect(() => {
+    if (!linked) return
+
+    const card = cardRef.current
+    if (!card) return
+
+    const details = card.querySelector("details")
+    if (details) details.open = true
+
+    card.focus({ preventScroll: true })
+    card.scrollIntoView({ block: "center" })
+  }, [linked])
+
   return (
-    <li className="grid min-w-0 gap-3 rounded-xl border border-stone-800 bg-stone-900/40 p-4">
+    <li
+      ref={cardRef}
+      id={`request-${request.id}`}
+      tabIndex={-1}
+      className={`grid min-w-0 gap-3 rounded-xl border border-stone-800 bg-stone-900/40 p-4 focus-visible:outline-2 focus-visible:outline-orange-400 ${
+        linked ? "ring-1 ring-orange-500/60" : ""
+      }`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="wrap-break-word font-semibold text-stone-100">

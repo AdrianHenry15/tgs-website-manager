@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:e2e": "playwright test",
+    "qa": "pnpm lint && pnpm build && pnpm test:e2e"
   },
   "dependencies": {
     "@marsidev/react-turnstile": "^1.6.3",
@@ -17,6 +19,7 @@
     "stripe": "^23.1.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.65.1",
     "@tailwindcss/turbopack": "4.3.3",
     "@types/node": "^20",
     "@types/react": "^19",

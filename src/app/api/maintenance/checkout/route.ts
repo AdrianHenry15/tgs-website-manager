@@ -1,7 +1,5 @@
 import Stripe from "stripe"
 
-export const runtime = "nodejs"
-
 export async function POST() {
   if (
     process.env.VERCEL_ENV === "production" ||
