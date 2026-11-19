@@ -30,7 +30,7 @@ const requestKinds = {
 } as const
 
 const filterButtonClass =
-  "rounded-full border border-stone-700 px-3 py-2 text-sm font-medium text-stone-300 transition-colors hover:border-orange-400/60 hover:text-orange-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-400 aria-pressed:border-orange-400/60 aria-pressed:bg-orange-500/15 aria-pressed:text-orange-200"
+  "rounded-full border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors hover:border-primary/60 hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary aria-pressed:border-primary/60 aria-pressed:bg-primary/15 aria-pressed:text-primary"
 
 const errorClass =
   "rounded-xl border border-red-900 bg-red-950/40 px-4 py-3 text-sm text-red-200"
@@ -354,7 +354,7 @@ export function Requests({ viewerId }: { viewerId: string }) {
 
   if (loading) {
     return (
-      <p role="status" className="text-sm text-stone-400">
+      <p role="status" className="text-sm text-muted">
         Loading workspace…
       </p>
     )
@@ -407,8 +407,8 @@ export function Requests({ viewerId }: { viewerId: string }) {
           <section
             key={website.id}
             className={`${panelClass} flex flex-wrap items-center justify-between gap-3`}>
-            <h2 className="font-semibold text-stone-100">{website.name}</h2>
-            <span className="rounded-full border border-orange-500/25 bg-orange-500/10 px-3 py-1 text-sm font-medium text-orange-200">
+            <h2 className="font-semibold text-foreground">{website.name}</h2>
+            <span className="rounded-full border border-primary/25 bg-primary/10 px-3 py-1 text-sm font-medium text-primary">
               {website.maintenance_plan}
             </span>
           </section>
@@ -487,7 +487,7 @@ export function Requests({ viewerId }: { viewerId: string }) {
           </form>
         ) : (
           !loadError && (
-            <p className="mt-3 text-sm text-stone-400">
+            <p className="mt-3 text-sm text-muted">
               No websites are assigned to this account.
             </p>
           )
@@ -540,7 +540,7 @@ export function Requests({ viewerId }: { viewerId: string }) {
 
         <p
           role="status"
-          className={notice ? "mt-4 text-sm text-orange-200" : "sr-only"}>
+          className={notice ? "mt-4 text-sm text-primary" : "sr-only"}>
           {notice}
         </p>
 
@@ -580,7 +580,7 @@ export function Requests({ viewerId }: { viewerId: string }) {
           </ul>
         ) : (
           !loadError && (
-            <p className="mt-5 rounded-xl border border-dashed border-stone-700 px-4 py-6 text-sm text-stone-400">
+            <p className="mt-5 rounded-xl border border-dashed border-border px-4 py-6 text-sm text-muted">
               {emptyMessage}
             </p>
           )
@@ -633,15 +633,15 @@ function RequestCard({
       ref={cardRef}
       id={`request-${request.id}`}
       tabIndex={-1}
-      className={`grid min-w-0 gap-3 rounded-xl border border-stone-800 bg-stone-900/40 p-4 focus-visible:outline-2 focus-visible:outline-orange-400 ${
-        linked ? "ring-1 ring-orange-500/60" : ""
+      className={`grid min-w-0 gap-3 rounded-xl border border-border bg-surface-secondary/40 p-4 focus-visible:outline-2 focus-visible:outline-primary ${
+        linked ? "ring-1 ring-primary/60" : ""
       }`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <h3 className="wrap-break-word font-semibold text-stone-100">
+          <h3 className="wrap-break-word font-semibold text-foreground">
             {request.title}
           </h3>
-          <p className="mt-1 text-xs text-stone-400">
+          <p className="mt-1 text-xs text-muted">
             {websiteName && <>{websiteName} · </>}
             {requestKinds[request.kind]}
           </p>
@@ -661,20 +661,20 @@ function RequestCard({
             ))}
           </select>
         ) : (
-          <span className="rounded-full border border-orange-500/25 bg-orange-500/10 px-3 py-1 text-xs font-medium text-orange-200">
+          <span className="rounded-full border border-primary/25 bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
             {statusLabel}
           </span>
         )}
       </div>
 
-      <details className="min-w-0 rounded-lg border border-stone-800 p-3 text-sm">
+      <details className="min-w-0 rounded-lg border border-border p-3 text-sm">
         <summary className="cursor-pointer font-medium">
           Request details
         </summary>
 
         <dl className="mt-3 grid gap-3">
           <div>
-            <dt className="text-xs text-stone-400">Description</dt>
+            <dt className="text-xs text-muted">Description</dt>
             <dd className="mt-1 whitespace-pre-wrap wrap-break-word">
               {request.description}
             </dd>
@@ -682,7 +682,7 @@ function RequestCard({
 
           {request.page_url && (
             <div>
-              <dt className="text-xs text-stone-400">Page URL</dt>
+              <dt className="text-xs text-muted">Page URL</dt>
               <dd className="mt-1 wrap-break-word">{request.page_url}</dd>
             </div>
           )}

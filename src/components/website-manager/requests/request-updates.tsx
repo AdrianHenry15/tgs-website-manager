@@ -131,7 +131,7 @@ export function RequestUpdates({
 
   return (
     <details
-      className="rounded-lg border border-zinc-800 p-3 text-sm"
+      className="rounded-lg border border-border p-3 text-sm"
       onToggle={(event) => {
         const nextOpen = event.currentTarget.open
         if (nextOpen && !open) {
@@ -148,18 +148,18 @@ export function RequestUpdates({
             {loadError}
           </p>
         ) : updates === null ? (
-          <p className="text-zinc-400">Loading updates…</p>
+          <p className="text-muted">Loading updates…</p>
         ) : updates.length === 0 ? (
-          <p className="text-zinc-400">No updates yet.</p>
+          <p className="text-muted">No updates yet.</p>
         ) : (
           <ul className="grid gap-3">
             {updates.map((update) => (
               <li
                 key={update.id}
-                className="min-w-0 rounded-lg bg-zinc-900 p-3">
+                className="min-w-0 rounded-lg bg-surface-secondary p-3">
                 <time
                   dateTime={update.created_at}
-                  className="text-xs text-zinc-400">
+                  className="text-xs text-muted">
                   {new Date(update.created_at).toLocaleString()}
                 </time>
                 <p className="mt-1 whitespace-pre-wrap wrap-break-word">
@@ -191,7 +191,7 @@ export function RequestUpdates({
             )}
 
             {postNotice && (
-              <p role="status" className="text-sm text-stone-300">
+              <p role="status" className="text-sm text-foreground">
                 {postNotice}
               </p>
             )}

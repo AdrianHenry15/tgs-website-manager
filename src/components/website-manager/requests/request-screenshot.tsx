@@ -156,7 +156,7 @@ export function RequestScreenshot({
 
   return (
     <details
-      className="rounded-lg border border-zinc-800 p-3 text-sm"
+      className="rounded-lg border border-border p-3 text-sm"
       onToggle={(event) => {
         const nextOpen = event.currentTarget.open
 
@@ -176,7 +176,7 @@ export function RequestScreenshot({
             {loadError}
           </p>
         ) : hasScreenshot === null ? (
-          <p className="text-zinc-400">Checking for a screenshot…</p>
+          <p className="text-muted">Checking for a screenshot…</p>
         ) : hasScreenshot ? (
           <>
             {open && (
@@ -194,7 +194,7 @@ export function RequestScreenshot({
         ) : canUpload ? (
           <form onSubmit={uploadScreenshot} className="grid gap-3">
             <div
-              className="grid justify-items-center gap-3 rounded-xl border border-dashed border-orange-400/40 bg-orange-500/5 px-4 py-6 text-center"
+              className="grid justify-items-center gap-3 rounded-xl border border-dashed border-primary/40 bg-primary/5 px-4 py-6 text-center"
               onDragOver={(event) => {
                 event.preventDefault()
                 event.dataTransfer.dropEffect = busy ? "none" : "copy"
@@ -213,17 +213,17 @@ export function RequestScreenshot({
                 chooseScreenshot(files.item(0))
               }}>
               <div>
-                <p className="font-medium text-stone-100">
+                <p className="font-medium text-foreground">
                   Drop a screenshot here
                 </p>
-                <p className="mt-1 text-xs text-stone-400">
+                <p className="mt-1 text-xs text-muted">
                   PNG, JPEG, or WebP · Up to 5 MiB
                 </p>
               </div>
 
               <label
-                className={`rounded-lg border border-orange-400/40 px-3 py-2 font-medium text-orange-200 focus-within:ring-2 focus-within:ring-orange-400 ${
-                  busy ? "opacity-50" : "cursor-pointer hover:bg-orange-500/10"
+                className={`rounded-lg border border-primary/40 px-3 py-2 font-medium text-primary focus-within:ring-2 focus-within:ring-primary ${
+                  busy ? "opacity-50" : "cursor-pointer hover:bg-primary/10"
                 }`}>
                 Choose file
                 <input
@@ -243,7 +243,7 @@ export function RequestScreenshot({
               {selectedFile && (
                 <p
                   role="status"
-                  className="max-w-full wrap-break-word text-sm text-stone-300">
+                  className="max-w-full wrap-break-word text-sm text-foreground">
                   Selected: {selectedFile.name}
                 </p>
               )}
@@ -257,7 +257,7 @@ export function RequestScreenshot({
             </button>
           </form>
         ) : (
-          <p className="text-zinc-400">No screenshot attached.</p>
+          <p className="text-muted">No screenshot attached.</p>
         )}
 
         {actionError && (
@@ -307,21 +307,21 @@ function ScreenshotPreview({ objectPath }: { objectPath: string }) {
 
   if (error)
     return (
-      <p role="status" className="text-stone-400">
+      <p role="status" className="text-muted">
         {error}
       </p>
     )
 
   if (!previewUrl) {
     return (
-      <p role="status" className="text-stone-400">
+      <p role="status" className="text-muted">
         Loading screenshot…
       </p>
     )
   }
 
   return (
-    <div className="overflow-hidden rounded-xl border border-stone-800 bg-stone-950 p-2">
+    <div className="overflow-hidden rounded-xl border border-border bg-surface p-2">
       {/* The preview comes from a local blob URL created after an authenticated download. */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img

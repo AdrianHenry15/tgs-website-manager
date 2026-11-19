@@ -41,26 +41,26 @@ export function RemoveWebsiteAccess() {
 
   return (
     <section className={`${panelClass} space-y-3`}>
-      <h3 className="font-semibold text-stone-100">Website Manager access</h3>
+      <h3 className="font-semibold text-foreground">Website Manager access</h3>
 
-      <p className="text-sm text-stone-400">
+      <p className="text-sm text-muted">
         Client accounts can remove their access to all assigned websites. Your
         shared login and existing requests will be kept.
       </p>
 
       {confirming ? (
         <>
-          <p className="text-sm text-stone-300">
+          <p className="text-sm text-foreground">
             You’ll lose access to your websites, requests, and screenshots.
             Contact TGS if you need access restored.
           </p>
 
-          <p className="text-sm text-stone-400">
+          <p className="text-sm text-muted">
             Removing portal access leaves your maintenance subscription active.
             To request cancellation, email{" "}
             <a
               href="mailto:ahenry@thirdgenerationstudios.com?subject=Maintenance%20cancellation"
-              className="text-orange-300 underline underline-offset-4">
+              className="text-primary underline underline-offset-4">
               ahenry@thirdgenerationstudios.com
             </a>
             .

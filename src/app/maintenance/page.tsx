@@ -52,9 +52,9 @@ const maintenanceServices = [
 
 export default function MaintenancePage() {
   return (
-    <main className="min-h-dvh bg-[#10100f] text-stone-100">
+    <main className="min-h-dvh bg-[#10100f] text-foreground">
       <div className="mx-auto max-w-6xl px-5 sm:px-8">
-        <header className="flex flex-wrap items-center justify-between gap-4 border-b border-stone-800 py-5">
+        <header className="flex flex-wrap items-center justify-between gap-4 border-b border-border py-5">
           <div className="flex items-center gap-3">
             <span
               aria-hidden="true"
@@ -75,7 +75,7 @@ export default function MaintenancePage() {
             Monthly website maintenance
           </h1>
 
-          <p className="mt-5 max-w-xl text-base text-stone-300 sm:text-lg">
+          <p className="mt-5 max-w-xl text-base text-foreground sm:text-lg">
             Send us website fixes and content changes through your client
             portal. You’ll have one place to see what’s open, what’s in
             progress, and what we’ve completed.
@@ -106,15 +106,15 @@ export default function MaintenancePage() {
           <ul className="mt-6 grid gap-4 md:grid-cols-3">
             {maintenanceServices.map(({ title, description }) => (
               <li key={title} className={panelClass}>
-                <h3 className="font-semibold text-stone-100">{title}</h3>
-                <p className="mt-2 text-sm leading-6 text-stone-400">
+                <h3 className="font-semibold text-foreground">{title}</h3>
+                <p className="mt-2 text-sm leading-6 text-muted">
                   {description}
                 </p>
               </li>
             ))}
           </ul>
 
-          <p className="mt-6 max-w-2xl text-sm leading-6 text-stone-400">
+          <p className="mt-6 max-w-2xl text-sm leading-6 text-muted">
             Planning a redesign or a new feature? Tell us what you have in mind.
             We’ll confirm the scope and pricing before work begins.
           </p>

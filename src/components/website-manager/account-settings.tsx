@@ -212,8 +212,8 @@ export function AccountSettings({ email }: { email: string }) {
   return (
     <section className={`${panelClass} space-y-5`}>
       <div>
-        <h2 className="text-lg font-semibold text-stone-100">My Account</h2>
-        <p className="mt-1 break-all text-sm text-stone-400">{email}</p>
+        <h2 className="text-lg font-semibold text-foreground">My Account</h2>
+        <p className="mt-1 break-all text-sm text-muted">{email}</p>
       </div>
 
       <div className="flex flex-wrap gap-2">

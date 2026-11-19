@@ -25,7 +25,7 @@ type RequestAction =
   | "finish_purge"
 
 const actionClass =
-  "rounded-lg border border-stone-700 px-3 py-2 text-sm font-medium text-stone-200 hover:border-orange-400 focus-visible:outline-2 focus-visible:outline-orange-400 disabled:opacity-50"
+  "rounded-lg border border-border px-3 py-2 text-sm font-medium text-foreground hover:border-primary focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-50"
 
 export function RequestActions<T extends RequestActionRecord>({
   request,

@@ -81,7 +81,7 @@ function Workspace({ user }: { user: Session["user"] }) {
 
   return (
     <div className="mx-auto w-full max-w-7xl px-5 py-8 sm:py-12">
-      <header className="mb-8 flex flex-wrap items-center justify-between gap-4 border-b border-stone-800 pb-5">
+      <header className="mb-8 flex flex-wrap items-center justify-between gap-4 border-b border-border pb-5">
         <Brand />
 
         <div className="flex flex-wrap gap-2">

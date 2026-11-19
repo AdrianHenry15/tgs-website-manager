@@ -158,11 +158,11 @@ export function AuthScreen({ screen, recoveryReady }: AuthScreenProps) {
         </h2>
 
         {screen === "loading" ? (
-          <p className="mt-3 text-sm text-stone-400">Checking your session…</p>
+          <p className="mt-3 text-sm text-muted">Checking your session…</p>
         ) : recovery ? (
           passwordSaved ? (
             <div className="mt-4 grid gap-4">
-              <p role="status" className="text-sm text-orange-200">
+              <p role="status" className="text-sm text-primary">
                 Password updated. Use your new password to sign in.
               </p>
               <button
@@ -191,7 +191,7 @@ export function AuthScreen({ screen, recoveryReady }: AuthScreenProps) {
             </form>
           ) : (
             <div className="mt-4 grid gap-3">
-              <p className="text-sm text-stone-300">
+              <p className="text-sm text-foreground">
                 This reset link is unavailable. Return to sign in to request a
                 new one.
               </p>
@@ -238,7 +238,7 @@ export function AuthScreen({ screen, recoveryReady }: AuthScreenProps) {
             )}
 
             {notice && (
-              <p role="status" className="text-sm text-orange-200">
+              <p role="status" className="text-sm text-primary">
                 {notice}
               </p>
             )}
@@ -272,7 +272,7 @@ export function AuthScreen({ screen, recoveryReady }: AuthScreenProps) {
           </p>
         )}
         {screen === "sign-in" && !forgot && (
-          <div className="mt-6 border-t border-stone-800 pt-4">
+          <div className="mt-6 border-t border-border pt-4">
             <Link href="/maintenance" className={linkButtonClass}>
               Explore website maintenance
             </Link>

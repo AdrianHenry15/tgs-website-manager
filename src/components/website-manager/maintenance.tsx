@@ -50,16 +50,16 @@ export function MonthlyUsage() {
           {error}
         </p>
       ) : rows === null ? (
-        <p className="mt-3 text-sm text-zinc-400">Loading usage…</p>
+        <p className="mt-3 text-sm text-muted">Loading usage…</p>
       ) : (
-        <ul className="mt-3 divide-y divide-zinc-800">
+        <ul className="mt-3 divide-y divide-border">
           {rows.map((site) => {
             const balance = site.allowance_minutes - site.used_minutes
 
             return (
               <li key={site.website_id} className="py-2">
                 <p className="font-medium">{site.website_name}</p>
-                <p className="text-sm text-zinc-300">
+                <p className="text-sm text-foreground">
                   {site.used_minutes} of {site.allowance_minutes} minutes used
                   {" · "}
                   {balance < 0
@@ -137,7 +137,7 @@ export function LogTime({
   }
 
   return (
-    <details className="rounded-lg border border-zinc-800 p-3 text-sm">
+    <details className="rounded-lg border border-border p-3 text-sm">
       <summary className="cursor-pointer font-medium">Log time</summary>
 
       <form onSubmit={logTime} className="mt-3">
@@ -181,7 +181,7 @@ export function LogTime({
           </p>
         )}
         {confirmation && (
-          <p role="status" className="mt-2 text-zinc-300">
+          <p role="status" className="mt-2 text-foreground">
             {confirmation}
           </p>
         )}

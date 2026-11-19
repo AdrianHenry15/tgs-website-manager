@@ -163,7 +163,7 @@ export function WebsiteBilling() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h3
           id="website-billing-heading"
-          className="font-semibold text-stone-100">
+          className="font-semibold text-foreground">
           Maintenance billing{mode === "test" ? " · Test mode" : ""}
         </h3>
 
@@ -177,7 +177,7 @@ export function WebsiteBilling() {
       </div>
 
       {loading ? (
-        <p role="status" className="text-sm text-stone-400">
+        <p role="status" className="text-sm text-muted">
           Checking maintenance billing…
         </p>
       ) : error ? (
@@ -185,20 +185,20 @@ export function WebsiteBilling() {
           {error}
         </p>
       ) : (
-        <dl className="divide-y divide-stone-800">
+        <dl className="divide-y divide-border">
           {billing.map(
             ({ websiteId, websiteName, status, canUpdatePaymentMethod }) => (
               <div
                 key={websiteId}
                 className="flex flex-wrap items-center justify-between gap-3 py-3 text-sm">
-                <dt className="text-stone-200">{websiteName}</dt>
+                <dt className="text-foreground">{websiteName}</dt>
 
                 <dd className="flex flex-wrap items-center gap-3">
                   <span
                     className={
                       status === "active" || status === "trialing"
-                        ? "text-orange-200"
-                        : "text-stone-400"
+                        ? "text-primary"
+                        : "text-muted"
                     }>
                     {statusLabels[status] ?? "Status unavailable"}
                   </span>
