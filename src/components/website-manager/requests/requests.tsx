@@ -431,9 +431,25 @@ export function Requests({ viewerId }: { viewerId: string }) {
                 Website
                 <select name="websiteId" required className={inputClass}>
                   {websites.map((website) => (
-                    <option key={website.id} value={website.id}>
-                      {website.name}
-                    </option>
+                    <section
+                      key={website.id}
+                      className="min-w-0 border-b border-border pb-6">
+                      <p className="text-xs font-medium uppercase tracking-widest text-muted">
+                        {websites.length === 1
+                          ? "Your website"
+                          : "Managed website"}
+                      </p>
+
+                      <h2 className="mt-2 wrap-break-word font-sans text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+                        {website.name}
+                      </h2>
+
+                      {website.maintenance_plan && (
+                        <p className="mt-2 text-sm text-muted">
+                          {website.maintenance_plan}
+                        </p>
+                      )}
+                    </section>
                   ))}
                 </select>
               </label>
@@ -653,7 +669,7 @@ function RequestCard({
             value={request.status}
             disabled={updatingStatus}
             onChange={(event) => onStatusChange(event.currentTarget.value)}
-            className={`${inputClass} max-w-full sm:w-auto`}>
+            className={`${inputClass} max-w-full sm:w-48`}>
             {requestStatuses.map(({ value, label }) => (
               <option key={value} value={value}>
                 {label}

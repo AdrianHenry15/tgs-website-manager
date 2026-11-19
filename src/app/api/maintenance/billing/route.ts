@@ -123,6 +123,11 @@ export async function GET(request: Request) {
   ])
 
   if (linksResult.error || contactsResult.error) {
+    console.error("Website billing database lookup failed:", {
+      links: linksResult.error,
+      contacts: contactsResult.error,
+    })
+
     return new Response("Could not load website billing.", { status: 500 })
   }
 
