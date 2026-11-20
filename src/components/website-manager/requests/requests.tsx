@@ -7,6 +7,7 @@ import { RequestScreenshot } from "./request-screenshot"
 import { RequestUpdates } from "./request-updates"
 import { requestColumns } from "./request-columns"
 import { buttonClass, inputClass, labelClass, panelClass } from "../styles"
+import { WebsiteSwitcher } from "../website-switcher"
 
 const requestStatuses = [
   { value: "received", label: "Received" },
@@ -95,6 +96,7 @@ export function Requests({ viewerId }: { viewerId: string }) {
   const [actionError, setActionError] = useState("")
   const [notice, setNotice] = useState("")
   const [linkedRequestId, setLinkedRequestId] = useState<string | null>(null)
+  const [selectedWebsiteId, setSelectedWebsiteId] = useState("")
 
   useEffect(() => {
     let active = true
@@ -120,9 +122,8 @@ export function Requests({ viewerId }: { viewerId: string }) {
         setWebsites(sites.data ?? [])
         setRequests(tickets.data ?? [])
 
-        const requestedId = new URLSearchParams(window.location.search).get(
-          "request",
-        )
+        const params = new URLSearchParams(window.location.search)
+        const requestedId = params.get("request") ?? params.get("requestId")
 
         if (requestedId && !tickets.error) {
           const linkedRequest = tickets.data?.find(
@@ -130,6 +131,7 @@ export function Requests({ viewerId }: { viewerId: string }) {
           )
 
           if (linkedRequest) {
+            setSelectedWebsiteId(linkedRequest.website_id)
             setLinkedRequestId(linkedRequest.id)
             setView(linkedRequest.deleted_at === null ? "all" : "trash")
             setKindFilter("all")
@@ -229,6 +231,7 @@ export function Requests({ viewerId }: { viewerId: string }) {
       }
 
       const savedRequest = result.request
+      setSelectedWebsiteId(savedRequest.website_id)
 
       setRequests((current) => [savedRequest, ...current])
       setView("open")
@@ -363,21 +366,24 @@ export function Requests({ viewerId }: { viewerId: string }) {
   const websiteNames = new Map(
     websites.map((website) => [website.id, website.name]),
   )
-  const websitesWithPlans = websites.filter(
-    (website) => website.maintenance_plan,
+
+  const scopedRequests = requests.filter(
+    (request) => !selectedWebsiteId || request.website_id === selectedWebsiteId,
   )
 
-  const visibleRequests = requests.filter((request) => {
+  const visibleRequests = scopedRequests.filter((request) => {
     const matchesView =
       view === "trash"
         ? request.deleted_at !== null
         : request.deleted_at === null &&
           matchesRequestView(request.status, view)
 
-    return matchesView && (kindFilter === "all" || request.kind === kindFilter)
+    const matchesKind = kindFilter === "all" || request.kind === kindFilter
+
+    return matchesView && matchesKind
   })
 
-  const hasRequestsInSection = requests.some((request) =>
+  const hasRequestsInSection = scopedRequests.some((request) =>
     view === "trash"
       ? request.deleted_at !== null
       : request.deleted_at === null,
@@ -403,16 +409,11 @@ export function Requests({ viewerId }: { viewerId: string }) {
           </p>
         )}
 
-        {websitesWithPlans.map((website) => (
-          <section
-            key={website.id}
-            className={`${panelClass} flex flex-wrap items-center justify-between gap-3`}>
-            <h2 className="font-semibold text-foreground">{website.name}</h2>
-            <span className="rounded-full border border-primary/25 bg-primary/10 px-3 py-1 text-sm font-medium text-primary">
-              {website.maintenance_plan}
-            </span>
-          </section>
-        ))}
+        <WebsiteSwitcher
+          websites={websites}
+          selectedWebsiteId={selectedWebsiteId}
+          onSelect={setSelectedWebsiteId}
+        />
       </div>
 
       <section
@@ -429,27 +430,26 @@ export function Requests({ viewerId }: { viewerId: string }) {
             <fieldset disabled={saving} className="grid min-w-0 gap-4">
               <label className={labelClass}>
                 Website
-                <select name="websiteId" required className={inputClass}>
+                <select
+                  name="websiteId"
+                  required
+                  value={
+                    websites.length === 1 ? websites[0].id : selectedWebsiteId
+                  }
+                  onChange={(event) =>
+                    setSelectedWebsiteId(event.currentTarget.value)
+                  }
+                  className={inputClass}>
+                  {websites.length > 1 && (
+                    <option value="" disabled>
+                      Choose a website
+                    </option>
+                  )}
+
                   {websites.map((website) => (
-                    <section
-                      key={website.id}
-                      className="min-w-0 border-b border-border pb-6">
-                      <p className="text-xs font-medium uppercase tracking-widest text-muted">
-                        {websites.length === 1
-                          ? "Your website"
-                          : "Managed website"}
-                      </p>
-
-                      <h2 className="mt-2 wrap-break-word font-sans text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
-                        {website.name}
-                      </h2>
-
-                      {website.maintenance_plan && (
-                        <p className="mt-2 text-sm text-muted">
-                          {website.maintenance_plan}
-                        </p>
-                      )}
-                    </section>
+                    <option key={website.id} value={website.id}>
+                      {website.name}
+                    </option>
                   ))}
                 </select>
               </label>
