@@ -1,4 +1,8 @@
 import { createClient } from "@supabase/supabase-js"
+import {
+  normalizeNotificationEmail,
+  shouldEmailRequestStatus,
+} from "@/lib/website-manager/notification-policy"
 
 type RequestEmailInput = {
   requestId: string
@@ -13,7 +17,11 @@ type EmailMessage = {
   text: string
 }
 
-export type RequestEmailStatus = "accepted" | "disabled" | "unconfirmed"
+export type RequestEmailStatus =
+  | "accepted"
+  | "disabled"
+  | "unconfirmed"
+  | "skipped"
 
 export async function sendRequestEmails({
   requestId,
@@ -21,11 +29,7 @@ export async function sendRequestEmails({
   websiteName,
   clientEmail,
 }: RequestEmailInput): Promise<RequestEmailStatus> {
-  const adminEmail =
-    process.env.WM_REQUEST_EMAIL_TEST_TO?.trim() ||
-    process.env.WM_REQUEST_EMAIL_ADMIN?.trim()
-
-  if (!adminEmail) return "disabled"
+  const adminEmail = process.env.WM_REQUEST_EMAIL_ADMIN?.trim()
 
   const details = [
     `Website: ${websiteName}`,
@@ -33,22 +37,31 @@ export async function sendRequestEmails({
     `Reference: ${requestId}`,
   ].join("\n")
 
-  return sendEmailBatch(
-    `wm-request-created/${requestId}`,
-    [
-      {
-        to: clientEmail,
-        subject: "TGS Website Manager — request received",
-        text: `We received your website request.\n\n${details}`,
-      },
-      {
-        to: adminEmail,
-        subject: "TGS Website Manager — new request",
-        text: `A new website request is ready to review.\n\n${details}`,
-      },
-    ],
-    requestId,
-  )
+  const messages: EmailMessage[] = []
+
+  if (clientEmail.trim()) {
+    messages.push({
+      to: clientEmail,
+      subject: "TGS Website Manager — request received",
+      text: `We received your website request.\n\n${details}`,
+    })
+  }
+
+  // The requester already receives a confirmation.
+  // Avoid another email when that same person is the admin.
+  if (
+    adminEmail &&
+    normalizeNotificationEmail(adminEmail) !==
+      normalizeNotificationEmail(clientEmail)
+  ) {
+    messages.push({
+      to: adminEmail,
+      subject: "TGS Website Manager — new request",
+      text: `A new website request is ready to review.\n\n${details}`,
+    })
+  }
+
+  return sendEmailBatch(`wm-request-created/${requestId}`, messages, requestId)
 }
 
 export async function sendRequestUpdateEmail({
@@ -60,100 +73,21 @@ export async function sendRequestUpdateEmail({
   updateId: string
   clientEmail: string
 }): Promise<RequestEmailStatus> {
+  // Posting a message is an intentional communication.
+  // Editing request fields does not call this function.
   return sendEmailBatch(
     `wm-request-updated/${updateId}`,
     [
       {
         to: clientEmail,
-        subject: "TGS Website Manager — update on your request",
-        text: "Third Generation Studios posted an update on your website request. Sign in to Website Manager to read it.",
+        subject: "TGS Website Manager — new message on your request",
+        text:
+          "Third Generation Studios posted a message on your website request. " +
+          "Sign in to Website Manager to read it.",
       },
     ],
     requestId,
   )
-}
-
-async function sendEmailBatch(
-  idempotencyKey: string,
-  messages: EmailMessage[],
-  requestId?: string,
-): Promise<RequestEmailStatus> {
-  const apiKey = process.env.RESEND_API_KEY
-  const from = process.env.WM_REQUEST_EMAIL_FROM
-  const portalUrl = process.env.WM_PORTAL_URL
-  const testTo = process.env.WM_REQUEST_EMAIL_TEST_TO?.trim()
-
-  if (!apiKey || !from || !portalUrl) return "disabled"
-
-  try {
-    const destination = new URL("/", portalUrl)
-
-    if (requestId) {
-      destination.searchParams.set("requestId", requestId)
-    }
-
-    const response = await fetch("https://api.resend.com/emails/batch", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "Idempotency-Key": idempotencyKey,
-      },
-      body: JSON.stringify(
-        messages.map(({ to, subject, text }) => ({
-          from,
-          to: [testTo || to],
-          subject,
-          text: `${text}\n\nOpen request: ${destination.href}`,
-        })),
-      ),
-      signal: AbortSignal.timeout(7000),
-    })
-
-    if (!response.ok) {
-      console.error("Website Manager email rejected", {
-        idempotencyKey,
-        status: response.status,
-      })
-      return "unconfirmed"
-    }
-
-    const result = (await response.json()) as {
-      data?: Array<{ id?: string }>
-    }
-
-    if (
-      !Array.isArray(result.data) ||
-      result.data.length !== messages.length ||
-      result.data.some((message) => !message.id)
-    ) {
-      console.error("Website Manager email response incomplete", {
-        idempotencyKey,
-      })
-      return "unconfirmed"
-    }
-
-    return "accepted"
-  } catch (error) {
-    const cause =
-      error instanceof Error && "cause" in error
-        ? (error.cause as
-            | {
-                code?: string
-                hostname?: string
-              }
-            | undefined)
-        : undefined
-
-    console.error("Could not confirm Website Manager email", {
-      idempotencyKey,
-      errorName: error instanceof Error ? error.name : "UnknownError",
-      code: cause?.code,
-      hostname: cause?.hostname,
-    })
-
-    return "unconfirmed"
-  }
 }
 
 export async function sendRequestStatusEmail({
@@ -167,17 +101,125 @@ export async function sendRequestStatusEmail({
   clientEmail: string
   statusLabel: string
 }): Promise<RequestEmailStatus> {
+  if (!shouldEmailRequestStatus(statusLabel)) {
+    return "skipped"
+  }
+
+  const isLive = statusLabel === "Live"
+
   return sendEmailBatch(
     `wm-request-status/${changeId}`,
     [
       {
         to: clientEmail,
-        subject: "TGS Website Manager — request status changed",
-        text: `Your website request is now marked "${statusLabel}". Sign in to Website Manager to review it.`,
+        subject: isLive
+          ? "TGS Website Manager — your request is live"
+          : "TGS Website Manager — your input is needed",
+        text: isLive
+          ? "Your website request has been marked Live. Sign in to review the details."
+          : `Your website request is marked "${statusLabel}". Sign in to review it and respond.`,
       },
     ],
     requestId,
   )
+}
+
+async function sendEmailBatch(
+  idempotencyKey: string,
+  messages: EmailMessage[],
+  requestId: string,
+): Promise<RequestEmailStatus> {
+  // Deduplicate actual recipients before applying the test override.
+  const recipients = new Set<string>()
+
+  const uniqueMessages = messages.filter(({ to }) => {
+    const normalized = normalizeNotificationEmail(to)
+
+    if (!normalized || recipients.has(normalized)) return false
+
+    recipients.add(normalized)
+    return true
+  })
+
+  if (uniqueMessages.length === 0) return "skipped"
+
+  const apiKey = process.env.RESEND_API_KEY?.trim()
+  const from = process.env.WM_REQUEST_EMAIL_FROM?.trim()
+  const portalUrl = process.env.WM_PORTAL_URL?.trim()
+  const testTo = process.env.WM_REQUEST_EMAIL_TEST_TO?.trim()
+
+  if (!apiKey || !from || !portalUrl) return "disabled"
+
+  try {
+    const destination = new URL("/", portalUrl)
+
+    if (destination.protocol !== "http:" && destination.protocol !== "https:") {
+      return "disabled"
+    }
+
+    destination.searchParams.set("requestId", requestId)
+
+    const response = await fetch("https://api.resend.com/emails/batch", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        "Idempotency-Key": idempotencyKey,
+      },
+      body: JSON.stringify(
+        uniqueMessages.map(({ to, subject, text }) => ({
+          from,
+          to: [testTo || to.trim()],
+          subject,
+          text: `${text}\n\nOpen request: ${destination.href}`,
+        })),
+      ),
+      signal: AbortSignal.timeout(7000),
+    })
+
+    if (!response.ok) {
+      console.error("Website Manager email rejected", {
+        idempotencyKey,
+        status: response.status,
+      })
+
+      return "unconfirmed"
+    }
+
+    const result = (await response.json()) as {
+      data?: Array<{ id?: string }>
+    }
+
+    if (
+      !Array.isArray(result.data) ||
+      result.data.length !== uniqueMessages.length ||
+      result.data.some(
+        (message) => typeof message.id !== "string" || !message.id,
+      )
+    ) {
+      console.error("Website Manager email response incomplete", {
+        idempotencyKey,
+      })
+
+      return "unconfirmed"
+    }
+
+    return "accepted"
+  } catch (error) {
+    const cause =
+      error instanceof Error && "cause" in error
+        ? (error.cause as { code?: string; hostname?: string } | undefined)
+        : undefined
+
+    console.error("Could not confirm Website Manager email", {
+      idempotencyKey,
+      errorName: error instanceof Error ? error.name : "UnknownError",
+      code: cause?.code,
+      hostname: cause?.hostname,
+    })
+
+    return "unconfirmed"
+  }
 }
 
 export async function notifyRequestClient({
@@ -190,12 +232,13 @@ export async function notifyRequestClient({
   websiteId: string
   actorId: string
   send: (email: string) => Promise<RequestEmailStatus>
-}): Promise<RequestEmailStatus | "skipped"> {
+}): Promise<RequestEmailStatus> {
   if (!requesterId || requesterId === actorId) return "skipped"
 
   const secretKey =
     process.env.WM_SUPABASE_SECRET_KEY?.trim() ||
     process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()
+
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()
 
   if (!secretKey || !url) return "unconfirmed"
@@ -221,6 +264,7 @@ export async function notifyRequestClient({
         websiteId,
         code: membershipError.code,
       })
+
       return "unconfirmed"
     }
 
@@ -232,6 +276,7 @@ export async function notifyRequestClient({
       console.error("Could not resolve notification recipient", {
         status: error.status,
       })
+
       return "unconfirmed"
     }
 
@@ -239,7 +284,10 @@ export async function notifyRequestClient({
 
     return await send(data.user.email)
   } catch {
-    console.error("Could not confirm request notification", { websiteId })
+    console.error("Could not confirm request notification", {
+      websiteId,
+    })
+
     return "unconfirmed"
   }
 }
