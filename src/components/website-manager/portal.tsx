@@ -11,6 +11,15 @@ import { Brand } from "./auth-ui"
 import { RemoveWebsiteAccess } from "./remove-website-access"
 import { WebsiteBilling } from "./website-billing"
 import { Maintenance } from "./maintenance/maintenance"
+import { Releases } from "./releases/releases"
+
+const workspaceSections = [
+  { id: "requests", label: "Requests" },
+  { id: "maintenance", label: "Maintenance" },
+  { id: "releases", label: "Website updates" },
+] as const
+
+type WorkspaceView = (typeof workspaceSections)[number]["id"]
 
 export function Portal() {
   const [session, setSession] = useState<Session | null | undefined>(undefined)
@@ -23,7 +32,10 @@ export function Portal() {
     } = supabase.auth.onAuthStateChange((event, nextSession) => {
       if (event === "INITIAL_SESSION") {
         const params = new URLSearchParams(window.location.search)
-        if (params.get("reset") === "1") setResetLink(true)
+
+        if (params.get("reset") === "1") {
+          setResetLink(true)
+        }
       }
 
       if (event === "PASSWORD_RECOVERY") {
@@ -63,9 +75,7 @@ export function Portal() {
 
 function Workspace({ user }: { user: Session["user"] }) {
   const [accountOpen, setAccountOpen] = useState(false)
-  const [activeView, setActiveView] = useState<"requests" | "maintenance">(
-    "requests",
-  )
+  const [activeView, setActiveView] = useState<WorkspaceView>("requests")
   const [signingOut, setSigningOut] = useState(false)
   const [signOutError, setSignOutError] = useState("")
 
@@ -75,7 +85,10 @@ function Workspace({ user }: { user: Session["user"] }) {
 
     try {
       const { error } = await supabase.auth.signOut({ scope: "local" })
-      if (error) setSignOutError(error.message)
+
+      if (error) {
+        setSignOutError(error.message)
+      }
     } catch {
       setSignOutError("Could not sign out. Try again.")
     } finally {
@@ -92,6 +105,7 @@ function Workspace({ user }: { user: Session["user"] }) {
           <button
             type="button"
             aria-expanded={accountOpen}
+            aria-controls="workspace-account"
             onClick={() => setAccountOpen((open) => !open)}
             className={secondaryButtonClass}>
             My Account
@@ -114,7 +128,7 @@ function Workspace({ user }: { user: Session["user"] }) {
       )}
 
       {accountOpen && (
-        <div className="mb-6 space-y-4">
+        <div id="workspace-account" className="mb-6 space-y-4">
           <AccountSettings email={user.email ?? ""} />
           <WebsiteBilling />
           <RemoveWebsiteAccess />
@@ -124,27 +138,27 @@ function Workspace({ user }: { user: Session["user"] }) {
       <nav
         aria-label="Workspace sections"
         className="mb-6 flex flex-wrap gap-2">
-        {(["requests", "maintenance"] as const).map((view) => (
+        {workspaceSections.map(({ id, label }) => (
           <button
-            key={view}
+            key={id}
             type="button"
-            aria-current={activeView === view ? "page" : undefined}
-            onClick={() => setActiveView(view)}
+            aria-current={activeView === id ? "page" : undefined}
+            onClick={() => setActiveView(id)}
             className={`${secondaryButtonClass} ${
-              activeView === view
+              activeView === id
                 ? "border-primary bg-primary/10 text-primary"
                 : ""
             }`}>
-            {view === "requests" ? "Requests" : "Maintenance"}
+            {label}
           </button>
         ))}
       </nav>
 
-      {activeView === "requests" ? (
-        <Requests viewerId={user.id} />
-      ) : (
-        <Maintenance />
-      )}
+      {activeView === "requests" && <Requests viewerId={user.id} />}
+
+      {activeView === "maintenance" && <Maintenance />}
+
+      {activeView === "releases" && <Releases />}
     </div>
   )
 }
