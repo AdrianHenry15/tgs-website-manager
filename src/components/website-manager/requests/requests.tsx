@@ -8,6 +8,7 @@ import { RequestUpdates } from "./request-updates"
 import { requestColumns } from "./request-columns"
 import { buttonClass, inputClass, labelClass, panelClass } from "../styles"
 import { WebsiteSwitcher } from "../website-switcher"
+import { StatusBadge, statusToneClass } from "../status-ui"
 
 const requestStatuses = [
   { value: "received", label: "Received" },
@@ -31,8 +32,7 @@ const requestKinds = {
 } as const
 
 const filterButtonClass =
-  "rounded-full border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors hover:border-primary/60 hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary aria-pressed:border-primary/60 aria-pressed:bg-primary/15 aria-pressed:text-primary"
-
+  "wm-filter rounded-full px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
 const errorClass =
   "rounded-xl border border-red-900 bg-red-950/40 px-4 py-3 text-sm text-red-200"
 
@@ -548,7 +548,7 @@ export function Requests({ viewerId }: { viewerId: string }) {
               type="button"
               aria-pressed={view === value}
               onClick={() => setView(value)}
-              className={filterButtonClass}>
+              className={`${filterButtonClass} ${statusToneClass(value)}`}>
               {label}
             </button>
           ))}
@@ -649,8 +649,10 @@ function RequestCard({
       ref={cardRef}
       id={`request-${request.id}`}
       tabIndex={-1}
-      className={`grid min-w-0 gap-3 rounded-xl border border-border bg-surface-secondary/40 p-4 focus-visible:outline-2 focus-visible:outline-primary ${
-        linked ? "ring-1 ring-primary/60" : ""
+      className={`wm-request-card ${statusToneClass(
+        request.deleted_at ? "trash" : request.status,
+      )} grid min-w-0 gap-3 rounded-xl border border-border bg-surface p-4 focus-visible:outline-2 focus-visible:outline-primary ${
+        linked ? "ring-2 ring-primary/60" : ""
       }`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
@@ -669,7 +671,9 @@ function RequestCard({
             value={request.status}
             disabled={updatingStatus}
             onChange={(event) => onStatusChange(event.currentTarget.value)}
-            className={`${inputClass} max-w-full sm:w-48`}>
+            className={`${inputClass} wm-status ${statusToneClass(
+              request.status,
+            )} w-full shrink-0 sm:w-48`}>
             {requestStatuses.map(({ value, label }) => (
               <option key={value} value={value}>
                 {label}
@@ -677,9 +681,7 @@ function RequestCard({
             ))}
           </select>
         ) : (
-          <span className="rounded-full border border-primary/25 bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
-            {statusLabel}
-          </span>
+          <StatusBadge status={request.status} label={statusLabel} />
         )}
       </div>
 

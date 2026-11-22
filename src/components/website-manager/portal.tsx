@@ -10,6 +10,7 @@ import { AccountSettings } from "./account-settings"
 import { Brand } from "./auth-ui"
 import { RemoveWebsiteAccess } from "./remove-website-access"
 import { WebsiteBilling } from "./website-billing"
+import { Maintenance } from "./maintenance/maintenance"
 
 export function Portal() {
   const [session, setSession] = useState<Session | null | undefined>(undefined)
@@ -62,6 +63,9 @@ export function Portal() {
 
 function Workspace({ user }: { user: Session["user"] }) {
   const [accountOpen, setAccountOpen] = useState(false)
+  const [activeView, setActiveView] = useState<"requests" | "maintenance">(
+    "requests",
+  )
   const [signingOut, setSigningOut] = useState(false)
   const [signOutError, setSignOutError] = useState("")
 
@@ -117,7 +121,30 @@ function Workspace({ user }: { user: Session["user"] }) {
         </div>
       )}
 
-      <Requests viewerId={user.id} />
+      <nav
+        aria-label="Workspace sections"
+        className="mb-6 flex flex-wrap gap-2">
+        {(["requests", "maintenance"] as const).map((view) => (
+          <button
+            key={view}
+            type="button"
+            aria-current={activeView === view ? "page" : undefined}
+            onClick={() => setActiveView(view)}
+            className={`${secondaryButtonClass} ${
+              activeView === view
+                ? "border-primary bg-primary/10 text-primary"
+                : ""
+            }`}>
+            {view === "requests" ? "Requests" : "Maintenance"}
+          </button>
+        ))}
+      </nav>
+
+      {activeView === "requests" ? (
+        <Requests viewerId={user.id} />
+      ) : (
+        <Maintenance />
+      )}
     </div>
   )
 }

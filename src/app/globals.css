@@ -113,3 +113,129 @@ select {
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%23afc3b5' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m4 6 4 4 4-4'/%3E%3C/svg%3E");
   }
 }
+
+:root {
+  --wm-info-bg: #eff6ff;
+  --wm-info-text: #1e40af;
+  --wm-info-border: #93c5fd;
+
+  --wm-progress-bg: #faf5ff;
+  --wm-progress-text: #6b21a8;
+  --wm-progress-border: #d8b4fe;
+
+  --wm-waiting-bg: #fffbeb;
+  --wm-waiting-text: #92400e;
+  --wm-waiting-border: #fcd34d;
+
+  --wm-scheduled-bg: #f0fdfa;
+  --wm-scheduled-text: #115e59;
+  --wm-scheduled-border: #5eead4;
+
+  --wm-success-bg: #f0fdf4;
+  --wm-success-text: #166534;
+  --wm-success-border: #86efac;
+
+  --wm-danger-bg: #fef2f2;
+  --wm-danger-text: #991b1b;
+  --wm-danger-border: #fca5a5;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --wm-info-bg: #172c47;
+    --wm-info-text: #bfdbfe;
+    --wm-info-border: #416c9e;
+
+    --wm-progress-bg: #30223f;
+    --wm-progress-text: #e9d5ff;
+    --wm-progress-border: #80609e;
+
+    --wm-waiting-bg: #382b16;
+    --wm-waiting-text: #fde68a;
+    --wm-waiting-border: #99752e;
+
+    --wm-scheduled-bg: #153733;
+    --wm-scheduled-text: #99f6e4;
+    --wm-scheduled-border: #438d82;
+
+    --wm-success-bg: #183722;
+    --wm-success-text: #bbf7d0;
+    --wm-success-border: #4d8d60;
+
+    --wm-danger-bg: #3b2024;
+    --wm-danger-text: #fecaca;
+    --wm-danger-border: #a45b64;
+  }
+}
+
+.wm-tone-info {
+  --wm-tone-bg: var(--wm-info-bg);
+  --wm-tone-text: var(--wm-info-text);
+  --wm-tone-border: var(--wm-info-border);
+}
+
+.wm-tone-progress {
+  --wm-tone-bg: var(--wm-progress-bg);
+  --wm-tone-text: var(--wm-progress-text);
+  --wm-tone-border: var(--wm-progress-border);
+}
+
+.wm-tone-waiting {
+  --wm-tone-bg: var(--wm-waiting-bg);
+  --wm-tone-text: var(--wm-waiting-text);
+  --wm-tone-border: var(--wm-waiting-border);
+}
+
+.wm-tone-scheduled {
+  --wm-tone-bg: var(--wm-scheduled-bg);
+  --wm-tone-text: var(--wm-scheduled-text);
+  --wm-tone-border: var(--wm-scheduled-border);
+}
+
+.wm-tone-success {
+  --wm-tone-bg: var(--wm-success-bg);
+  --wm-tone-text: var(--wm-success-text);
+  --wm-tone-border: var(--wm-success-border);
+}
+
+.wm-tone-danger {
+  --wm-tone-bg: var(--wm-danger-bg);
+  --wm-tone-text: var(--wm-danger-text);
+  --wm-tone-border: var(--wm-danger-border);
+}
+
+.wm-tone-neutral {
+  --wm-tone-bg: var(--surface-secondary);
+  --wm-tone-text: var(--foreground);
+  --wm-tone-border: var(--border);
+}
+
+/* Shared badge and native status-select colors. */
+.wm-status[class*="wm-tone-"] {
+  border: 1px solid var(--wm-tone-border);
+  background-color: var(--wm-tone-bg);
+  color: var(--wm-tone-text);
+}
+
+/* Filters remain quiet until hovered or selected. */
+.wm-filter {
+  border: 1px solid var(--border);
+  background-color: var(--surface);
+  color: var(--muted);
+}
+
+.wm-filter:hover,
+.wm-filter[aria-pressed="true"] {
+  border-color: var(--wm-tone-border);
+  background-color: var(--wm-tone-bg);
+  color: var(--wm-tone-text);
+}
+
+.wm-filter[aria-pressed="true"] {
+  box-shadow: inset 0 -2px 0 var(--wm-tone-border);
+}
+
+/* Small visual anchor on each request card. */
+.wm-request-card[class*="wm-tone-"] {
+  border-inline-start: 3px solid var(--wm-tone-border);
+}
