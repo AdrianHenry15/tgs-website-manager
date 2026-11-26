@@ -1,25 +1,28 @@
 import { createHash, timingSafeEqual } from "node:crypto"
 import { createClient } from "@supabase/supabase-js"
+import { deliverReleaseNotifications } from "@/lib/website-manager/deliver-release-notifications"
 
 const headers = {
   "Cache-Control": "private, no-store",
 }
 
 function matchesSecret(received: string, expected: string) {
-  const receivedHash = createHash("sha256").update(received).digest()
-  const expectedHash = createHash("sha256").update(expected).digest()
+  return timingSafeEqual(
+    createHash("sha256").update(received).digest(),
+    createHash("sha256").update(expected).digest(),
+  )
+}
 
-  return timingSafeEqual(receivedHash, expectedHash)
+function validCount(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0
 }
 
 export async function GET(request: Request) {
   const secret = process.env.CRON_SECRET?.trim()
 
   if (!secret || secret.length < 32) {
-    console.error("Maintenance automation: CRON_SECRET is not configured.")
-
     return Response.json(
-      { error: "Maintenance automation is not configured." },
+      { error: "Automation is not configured." },
       { status: 503, headers },
     )
   }
@@ -30,73 +33,130 @@ export async function GET(request: Request) {
     return Response.json({ error: "Unauthorized." }, { status: 401, headers })
   }
 
-  if (process.env.WM_MAINTENANCE_AUTOMATION_ENABLED !== "true") {
-    return Response.json({ enabled: false, generated: 0 }, { headers })
+  const maintenanceEnabled =
+    process.env.WM_MAINTENANCE_AUTOMATION_ENABLED === "true"
+
+  const recapAutoPublishEnabled =
+    process.env.WM_RECAP_AUTO_PUBLISH_ENABLED === "true"
+
+  const deliveryEnabled =
+    process.env.WM_NOTIFICATION_DELIVERY_ENABLED === "true"
+
+  if (!maintenanceEnabled && !recapAutoPublishEnabled && !deliveryEnabled) {
+    return Response.json(
+      {
+        enabled: false,
+        generated: 0,
+        recapsGenerated: 0,
+        recapsPublished: 0,
+        notifications: { enabled: false },
+      },
+      { headers },
+    )
   }
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()
-  const supabaseKey =
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()
+  const key =
     process.env.WM_SUPABASE_SECRET_KEY?.trim() ||
     process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()
 
-  if (!supabaseUrl || !supabaseKey) {
-    console.error("Maintenance automation: Supabase is not configured.")
-
+  if (!url || !key) {
     return Response.json(
-      { error: "Maintenance automation is not configured." },
+      { error: "Automation database is not configured." },
       { status: 503, headers },
     )
   }
 
+  const admin = createClient(url, key, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+  })
+
+  let generated = 0
+  let recapsGenerated = 0
+  let recapsPublished = 0
+
+  let maintenanceFailed = false
+  let recapsFailed = false
+
+  if (maintenanceEnabled) {
+    try {
+      const { data, error } = await admin.rpc("wm_generate_maintenance_month")
+
+      if (error || !validCount(data)) {
+        throw new Error("Invalid generation result.")
+      }
+
+      generated = data
+    } catch {
+      maintenanceFailed = true
+      console.error("Monthly maintenance generation failed.")
+    }
+  }
+
+  if (maintenanceEnabled || recapAutoPublishEnabled) {
+    try {
+      const generation = await admin.rpc("wm_generate_monthly_recaps")
+
+      if (generation.error || !validCount(generation.data)) {
+        throw new Error("Invalid recap generation result.")
+      }
+
+      recapsGenerated = generation.data
+
+      if (recapAutoPublishEnabled) {
+        const publication = await admin.rpc("wm_auto_publish_monthly_recaps")
+
+        if (publication.error || !validCount(publication.data)) {
+          throw new Error("Invalid recap publication result.")
+        }
+
+        recapsPublished = publication.data
+      }
+    } catch {
+      recapsFailed = true
+      console.error("Monthly recap processing failed.")
+    }
+  }
+
   try {
-    const supabase = createClient(supabaseUrl, supabaseKey, {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-        detectSessionInUrl: false,
-      },
-    })
+    const notifications = await deliverReleaseNotifications(admin)
 
-    // The database determines each organization's current month.
-    // No caller-supplied month or website is accepted.
-    const { data, error } = await supabase.rpc("wm_generate_maintenance_month")
-
-    if (error) {
-      console.error("Maintenance generation failed:", {
-        code: error.code,
-        message: error.message,
-      })
-
-      return Response.json(
-        { error: "Could not generate monthly maintenance." },
-        { status: 500, headers },
-      )
+    const result = {
+      enabled: true,
+      generated,
+      recapsGenerated,
+      recapsPublished,
+      maintenanceFailed,
+      recapsFailed,
+      notifications,
+      checkedAt: new Date().toISOString(),
     }
 
-    if (!Number.isInteger(data) || data < 0) {
-      throw new Error("Unexpected maintenance generation result.")
-    }
+    console.info("Website Manager automation completed", result)
 
-    console.info("Maintenance generation completed:", {
-      generated: data,
+    return Response.json(result, {
+      status:
+        maintenanceFailed || recapsFailed || notifications.unconfirmed > 0
+          ? 500
+          : 200,
+      headers,
     })
+  } catch {
+    console.error("Notification processing failed.")
 
     return Response.json(
       {
-        enabled: true,
-        generated: data,
-        checkedAt: new Date().toISOString(),
+        error: "Notification processing failed.",
+        generated,
+        recapsGenerated,
+        recapsPublished,
+        maintenanceFailed,
+        recapsFailed,
       },
-      { headers },
-    )
-  } catch (error) {
-    console.error(
-      "Maintenance automation failed:",
-      error instanceof Error ? error.message : "Unknown error",
-    )
-
-    return Response.json(
-      { error: "Maintenance automation failed." },
       { status: 500, headers },
     )
   }

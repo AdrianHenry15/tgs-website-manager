@@ -11,6 +11,7 @@ const statusLabels = {
   in_progress: "In progress",
   waiting_on_client: "Waiting on client",
   ready_for_review: "Ready for review",
+  scheduled: "Scheduled",
   live: "Live",
 }
 

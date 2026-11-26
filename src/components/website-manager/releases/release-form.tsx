@@ -4,11 +4,12 @@ import { useRef, useState, type FormEvent } from "react"
 import { supabase } from "@/lib/supabase"
 import { inputClass, labelClass, secondaryButtonClass } from "../styles"
 import type { ReleaseWebsite, WebsiteRelease } from "./types"
+import { requestReleaseDelivery } from "./request-release-delivery"
 
 type Props = {
   websites: ReleaseWebsite[]
   release: WebsiteRelease | null
-  onSaved: () => void
+  onSaved: (message?: string) => void
   onCancel: () => void
 }
 
@@ -154,7 +155,14 @@ export function ReleaseForm({ websites, release, onSaved, onCancel }: Props) {
         return
       }
 
-      onSaved()
+      const notice =
+        publish && values.client_visible
+          ? await requestReleaseDelivery(result.data.id)
+          : publish
+            ? "Internal update published."
+            : "Draft saved."
+
+      onSaved(notice)
     } catch {
       setUncertain(true)
       setError(

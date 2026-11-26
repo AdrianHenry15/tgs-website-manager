@@ -1,16 +1,10 @@
-import {
-  notifyRequestClient,
-  sendRequestUpdateEmail,
-} from "@/components/website-manager/requests/request-email"
 import { createClient } from "@supabase/supabase-js"
 
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
-const serverAuthOptions = {
-  persistSession: false,
-  autoRefreshToken: false,
-  detectSessionInUrl: false,
+const headers = {
+  "Cache-Control": "private, no-store",
 }
 
 export async function POST(request: Request) {
@@ -20,122 +14,116 @@ export async function POST(request: Request) {
 
   if (!token) {
     return Response.json(
-      { error: "Sign in again to post an update." },
-      { status: 401 },
+      { error: "Sign in again to post a message." },
+      { status: 401, headers },
     )
   }
 
   const payload = (await request.json().catch(() => null)) as {
     requestId?: unknown
+    messageId?: unknown
     body?: unknown
   } | null
 
   const requestId = payload?.requestId
+  const messageId = payload?.messageId
   const body = typeof payload?.body === "string" ? payload.body.trim() : ""
 
   if (
     typeof requestId !== "string" ||
     !uuidPattern.test(requestId) ||
+    typeof messageId !== "string" ||
+    !uuidPattern.test(messageId) ||
     !body ||
     body.length > 5000
   ) {
     return Response.json(
-      {
-        error:
-          "Choose a request and enter an update of up to 5,000 characters.",
+      { error: "Choose a request and enter up to 5,000 characters." },
+      { status: 400, headers },
+    )
+  }
+
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()
+  const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim()
+
+  if (!url || !key) {
+    return Response.json(
+      { error: "Messaging is unavailable." },
+      { status: 503, headers },
+    )
+  }
+
+  try {
+    const viewer = createClient(url, key, {
+      global: {
+        headers: { Authorization: `Bearer ${token}` },
       },
-      { status: 400 },
-    )
-  }
-
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
-    {
-      global: { headers: { Authorization: `Bearer ${token}` } },
-      auth: serverAuthOptions,
-    },
-  )
-
-  const { data: auth, error: authError } = await supabase.auth.getUser(token)
-
-  if (authError || !auth.user) {
-    return Response.json(
-      { error: "Sign in again to post an update." },
-      { status: 401 },
-    )
-  }
-
-  const [ticketResult, managedResult] = await Promise.all([
-    supabase
-      .from("wm_requests")
-      .select("website_id, submitted_by")
-      .eq("id", requestId)
-      .is("deleted_at", null)
-      .maybeSingle(),
-    supabase.rpc("wm_managed_website_ids"),
-  ])
-
-  if (ticketResult.error || managedResult.error) {
-    console.error("Could not check request update permissions", {
-      requestId,
-      ticketCode: ticketResult.error?.code,
-      managedCode: managedResult.error?.code,
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+      },
     })
-    return Response.json(
-      { error: "Could not check access to this request. Try again." },
-      { status: 500 },
-    )
-  }
 
-  const ticket = ticketResult.data
-  const managedWebsites = (managedResult.data ?? []) as { website_id: string }[]
+    const { data: auth, error: authError } = await viewer.auth.getUser(token)
 
-  if (
-    !ticket ||
-    !managedWebsites.some(({ website_id }) => website_id === ticket.website_id)
-  ) {
-    return Response.json(
-      { error: "You don’t have access to post updates on this request." },
-      { status: 403 },
-    )
-  }
+    if (authError || !auth.user) {
+      return Response.json(
+        { error: "Sign in again to post a message." },
+        { status: 401, headers },
+      )
+    }
 
-  const { data: update, error: saveError } = await supabase
-    .from("wm_request_updates")
-    .insert({ request_id: requestId, body })
-    .select("id, body, created_at")
-    .single()
-
-  if (saveError || !update) {
-    console.error("Could not save request update", {
-      requestId,
-      code: saveError?.code,
+    const { data, error } = await viewer.rpc("wm_post_request_message", {
+      p_request_id: requestId,
+      p_message_id: messageId,
+      p_body: body,
     })
+
+    if (error) {
+      const status =
+        error.code === "42501"
+          ? 403
+          : error.code === "22023"
+            ? 400
+            : error.code === "40001"
+              ? 409
+              : 500
+
+      return Response.json(
+        {
+          error:
+            status === 403
+              ? "This request is unavailable to your account."
+              : status === 409
+                ? "This message conflicts with an existing message. Refresh the conversation."
+                : "Could not confirm the save. Retry the same message.",
+        },
+        { status, headers },
+      )
+    }
+
+    if (!data?.update) {
+      return Response.json(
+        { error: "Could not confirm the save. Retry the same message." },
+        { status: 500, headers },
+      )
+    }
+
     return Response.json(
-      { error: "Could not confirm the save. Reopen updates before retrying." },
-      { status: saveError?.code === "42501" ? 403 : 500 },
+      {
+        update: data.update,
+        emailStatus: "queued",
+      },
+      {
+        status: data.created ? 201 : 200,
+        headers,
+      },
+    )
+  } catch {
+    return Response.json(
+      { error: "Could not confirm the save. Retry the same message." },
+      { status: 500, headers },
     )
   }
-
-  const emailStatus = await notifyRequestClient({
-    requesterId: ticket.submitted_by,
-    websiteId: ticket.website_id,
-    actorId: auth.user.id,
-    send: (clientEmail) =>
-      sendRequestUpdateEmail({
-        requestId,
-        updateId: update.id,
-        clientEmail,
-      }),
-  })
-
-  console.info("Request update notification", {
-    requestId,
-    emailStatus,
-    hasRequester: Boolean(ticket.submitted_by),
-    requesterIsCurrentUser: ticket.submitted_by === auth.user.id,
-  })
-
-  return Response.json({ update, emailStatus }, { status: 201 })
 }

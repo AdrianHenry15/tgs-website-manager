@@ -12,11 +12,18 @@ import { RemoveWebsiteAccess } from "./remove-website-access"
 import { WebsiteBilling } from "./website-billing"
 import { Maintenance } from "./maintenance/maintenance"
 import { Releases } from "./releases/releases"
+import { Recaps } from "./recaps/recaps"
+import { Dashboard } from "./dashboard/dashboard"
+import { MaintenancePlanSettings } from "./billing/maintenance-plan-settings"
+import { MaintenanceLedger } from "./billing/maintenance-ledger"
+import { StripeInvoiceHistory } from "./billing/stripe-invoice-history"
 
 const workspaceSections = [
+  { id: "overview", label: "Overview" },
   { id: "requests", label: "Requests" },
   { id: "maintenance", label: "Maintenance" },
   { id: "releases", label: "Website updates" },
+  { id: "recaps", label: "Monthly recaps" },
 ] as const
 
 type WorkspaceView = (typeof workspaceSections)[number]["id"]
@@ -75,7 +82,20 @@ export function Portal() {
 
 function Workspace({ user }: { user: Session["user"] }) {
   const [accountOpen, setAccountOpen] = useState(false)
-  const [activeView, setActiveView] = useState<WorkspaceView>("requests")
+  const [activeView, setActiveView] = useState<WorkspaceView>(() => {
+    if (typeof window === "undefined") return "overview"
+
+    const params = new URLSearchParams(window.location.search)
+
+    if (params.has("recapId")) return "recaps"
+    if (params.has("releaseId")) return "releases"
+
+    if (params.has("requestId") || params.has("request")) {
+      return "requests"
+    }
+
+    return "overview"
+  })
   const [signingOut, setSigningOut] = useState(false)
   const [signOutError, setSignOutError] = useState("")
 
@@ -130,6 +150,9 @@ function Workspace({ user }: { user: Session["user"] }) {
       {accountOpen && (
         <div id="workspace-account" className="mb-6 space-y-4">
           <AccountSettings email={user.email ?? ""} />
+          <MaintenancePlanSettings />
+          <MaintenanceLedger />
+          <StripeInvoiceHistory />
           <WebsiteBilling />
           <RemoveWebsiteAccess />
         </div>
@@ -159,6 +182,12 @@ function Workspace({ user }: { user: Session["user"] }) {
       {activeView === "maintenance" && <Maintenance />}
 
       {activeView === "releases" && <Releases />}
+
+      {activeView === "recaps" && <Recaps />}
+
+      {activeView === "overview" && (
+        <Dashboard onNewRequest={() => setActiveView("requests")} />
+      )}
     </div>
   )
 }

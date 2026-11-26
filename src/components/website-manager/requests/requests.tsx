@@ -15,6 +15,7 @@ const requestStatuses = [
   { value: "in_progress", label: "In progress" },
   { value: "waiting_on_client", label: "Waiting on client" },
   { value: "ready_for_review", label: "Ready for review" },
+  { value: "scheduled", label: "Scheduled" },
   { value: "live", label: "Live" },
 ] as const
 
@@ -710,7 +711,11 @@ function RequestCard({
       {request.purge_started_at === null && (
         <>
           <RequestScreenshot requestId={request.id} canUpload={canUpload} />
-          <RequestUpdates requestId={request.id} canPost={canManage} />
+          <RequestUpdates
+            requestId={request.id}
+            canPost={request.deleted_at === null}
+            canManage={canManage}
+          />
         </>
       )}
 

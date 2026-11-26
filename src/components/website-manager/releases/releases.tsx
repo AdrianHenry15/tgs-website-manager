@@ -12,6 +12,7 @@ import { ReleaseForm } from "./release-form"
 import { useReleases } from "./use-releases"
 import type { WebsiteRelease } from "./types"
 import { ReleaseScreenshot } from "./release-screenshot"
+import { ReleaseRequestLink } from "./release-request-link"
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("en-US", {
@@ -46,6 +47,7 @@ export function Releases() {
   const [websiteId, setWebsiteId] = useState("")
   const [view, setView] = useState<"published" | "draft">("published")
   const [editing, setEditing] = useState<WebsiteRelease | "new" | null>(null)
+  const [notice, setNotice] = useState("")
 
   const managedWebsites = websites.filter((website) =>
     managedIds.includes(website.id),
@@ -66,7 +68,8 @@ export function Releases() {
     refresh()
   }
 
-  function saved() {
+  function saved(message = "") {
+    setNotice(message)
     setEditing(null)
     refresh()
   }
@@ -96,7 +99,13 @@ export function Releases() {
             </button>
           )}
       </div>
-
+      {notice && (
+        <p
+          role="status"
+          className="rounded-xl border border-border bg-primary/10 px-4 py-3 text-sm">
+          {notice}
+        </p>
+      )}
       {loading ? (
         <p role="status" className="text-sm text-muted">
           Loading website updates…
@@ -195,6 +204,7 @@ export function Releases() {
 
                 return (
                   <li
+                    id={`release-${release.id}`}
                     key={release.id}
                     className="rounded-xl border border-border bg-surface-secondary/40 p-5">
                     <div className="flex flex-wrap items-start justify-between gap-3">
@@ -223,6 +233,11 @@ export function Releases() {
                       release={release}
                       canManage={canEdit}
                       onChanged={refresh}
+                    />
+
+                    <ReleaseRequestLink
+                      release={release}
+                      canManage={managedIds.includes(release.website_id)}
                     />
 
                     <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
