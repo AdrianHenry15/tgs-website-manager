@@ -170,7 +170,7 @@ export function Dashboard({ onNewRequest }: Props) {
                     {names.get(request.website_id)}
                   </p>
 
-                  <p className="mt-1 break-words text-sm font-medium">
+                  <p className="mt-1 wrap-break-word text-sm font-medium">
                     {request.title}
                   </p>
                 </div>
@@ -208,7 +208,7 @@ export function Dashboard({ onNewRequest }: Props) {
                   {data.release.title}
                 </h4>
 
-                <p className="mt-3 whitespace-pre-wrap break-words text-sm text-muted">
+                <p className="mt-3 whitespace-pre-wrap wrap-break-word text-sm text-muted">
                   {data.release.summary}
                 </p>
               </div>

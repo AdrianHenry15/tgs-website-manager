@@ -77,12 +77,12 @@ function WorkItems({
               <li
                 key={`${text(item.id)}:${index}`}
                 className="rounded-xl border border-border p-4">
-                <p className="break-words text-sm font-medium">
+                <p className="wrap-break-word text-sm font-medium">
                   {text(item.title)}
                 </p>
 
                 {text(item.description) && (
-                  <p className="mt-2 whitespace-pre-wrap break-words text-sm text-muted">
+                  <p className="mt-2 whitespace-pre-wrap wrap-break-word text-sm text-muted">
                     {text(item.description)}
                   </p>
                 )}
@@ -135,7 +135,7 @@ function RecapContents({ recap }: { recap: MonthlyRecap }) {
                 className="rounded-xl border border-border p-4">
                 <p className="text-sm font-medium">{text(release.title)}</p>
 
-                <p className="mt-2 whitespace-pre-wrap break-words text-sm text-muted">
+                <p className="mt-2 whitespace-pre-wrap wrap-break-word text-sm text-muted">
                   {text(release.summary)}
                 </p>
 
