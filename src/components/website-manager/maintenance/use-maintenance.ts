@@ -14,6 +14,7 @@ export type MaintenanceActivity = {
   client_visible: boolean
   due_on: string | null
   completed_at: string | null
+  updated_at: string
 }
 
 type Website = {
@@ -22,7 +23,7 @@ type Website = {
 }
 
 const activityColumns =
-  "id, website_id, title, description, source, category, status, client_visible, due_on, completed_at"
+  "id, website_id, title, description, source, category, status, client_visible, due_on, completed_at, updated_at" as const
 
 export function useMaintenance(month: string) {
   const [websites, setWebsites] = useState<Website[]>([])
@@ -125,6 +126,7 @@ export function useMaintenance(month: string) {
         .update({ status: nextStatus })
         .eq("id", activity.id)
         .eq("status", activity.status)
+        .eq("updated_at", activity.updated_at)
         .select(activityColumns)
         .maybeSingle()
 

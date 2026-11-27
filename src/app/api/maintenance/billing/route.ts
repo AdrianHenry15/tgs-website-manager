@@ -4,6 +4,11 @@ import {
   getStripeMode,
   isStripeKeyForMode,
 } from "@/lib/website-manager/stripe-mode"
+import {
+  canManageBillingCustomer,
+  loadWebsiteBillingLinks,
+  type WebsiteBillingLink,
+} from "@/lib/website-manager/stripe-billing-links"
 
 const authOptions = {
   persistSession: false,
@@ -12,14 +17,25 @@ const authOptions = {
 }
 
 const noStore = { "Cache-Control": "private, no-store" }
+
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+function failure(message: string, status: number) {
+  return new Response(message, {
+    status,
+    headers: noStore,
+  })
+}
 
 async function getBillingContext(request: Request) {
   const mode = getStripeMode()
 
   if (!mode) {
-    return new Response(null, { status: 404, headers: noStore })
+    return new Response(null, {
+      status: 404,
+      headers: noStore,
+    })
   }
 
   const token = request.headers
@@ -27,7 +43,7 @@ async function getBillingContext(request: Request) {
     ?.match(/^Bearer ([^\s]+)$/i)?.[1]
 
   if (!token) {
-    return new Response("Sign in again to check billing.", { status: 401 })
+    return failure("Sign in again to check billing.", 401)
   }
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()
@@ -44,116 +60,122 @@ async function getBillingContext(request: Request) {
     !supabaseSecret ||
     !isStripeKeyForMode(stripeKey, mode)
   ) {
-    return new Response("Stripe billing is not configured.", { status: 503 })
+    return failure("Stripe billing is not configured.", 503)
   }
 
   const viewer = createClient(url, publishableKey, {
-    global: { headers: { Authorization: `Bearer ${token}` } },
+    global: {
+      headers: { Authorization: `Bearer ${token}` },
+    },
     auth: authOptions,
   })
 
   const { data, error } = await viewer.auth.getUser(token)
 
   if (error || !data.user) {
-    return new Response("Sign in again to check billing.", { status: 401 })
+    return failure("Sign in again to check billing.", 401)
   }
 
   return {
     mode,
     userId: data.user.id,
     viewer,
-    admin: createClient(url, supabaseSecret, { auth: authOptions }),
-    stripe: new Stripe(stripeKey, { timeout: 5_000, maxNetworkRetries: 0 }),
+    admin: createClient(url, supabaseSecret, {
+      auth: authOptions,
+    }),
+    stripe: new Stripe(stripeKey, {
+      timeout: 5_000,
+      maxNetworkRetries: 0,
+    }),
   }
 }
 
 async function getWebsiteSubscription(
   stripe: Stripe,
-  subscriptionId: string,
+  link: WebsiteBillingLink,
   livemode: boolean,
 ) {
-  const subscription = await stripe.subscriptions.retrieve(subscriptionId)
+  const subscription = await stripe.subscriptions.retrieve(link.subscriptionId)
+
+  const customerId =
+    typeof subscription.customer === "string"
+      ? subscription.customer
+      : subscription.customer.id
 
   if (
+    subscription.id !== link.subscriptionId ||
     subscription.livemode !== livemode ||
-    subscription.metadata.source !== "tgs_website_manager"
+    subscription.metadata.source !== "tgs_website_manager" ||
+    (link.kind === "verified" && link.customerId !== customerId)
   ) {
     return null
   }
 
   return {
     status: subscription.status,
-    customerId:
-      typeof subscription.customer === "string"
-        ? subscription.customer
-        : subscription.customer.id,
+    customerId,
   }
 }
+
 export async function GET(request: Request) {
   const context = await getBillingContext(request)
   if (context instanceof Response) return context
 
   const { viewer, admin, stripe, userId, mode } = context
 
+  // Website access is checked through the signed-in user's RLS.
   const { data: websites, error: websitesError } = await viewer
     .from("wm_websites")
     .select("id, name")
     .order("name")
 
   if (websitesError) {
-    return new Response("Could not load websites.", { status: 500 })
+    return failure("Could not load websites.", 500)
   }
 
-  if (websites.length === 0) {
+  const accessibleWebsites = websites ?? []
+
+  if (accessibleWebsites.length === 0) {
     return Response.json({ billing: [], mode }, { headers: noStore })
   }
 
-  const [linksResult, contactsResult] = await Promise.all([
-    admin
-      .from("wm_website_billing")
-      .select("website_id, stripe_subscription_id")
-      .in(
-        "website_id",
-        websites.map(({ id }) => id),
-      ),
-    admin
-      .from("wm_stripe_billing_contacts")
-      .select("stripe_customer_id")
-      .eq("user_id", userId),
-  ])
+  let connectionData: Awaited<ReturnType<typeof loadWebsiteBillingLinks>>
 
-  if (linksResult.error || contactsResult.error) {
-    console.error("Website billing database lookup failed:", {
-      links: linksResult.error,
-      contacts: contactsResult.error,
-    })
-
-    return new Response("Could not load website billing.", { status: 500 })
+  try {
+    connectionData = await loadWebsiteBillingLinks(
+      admin,
+      accessibleWebsites.map(({ id }) => id),
+      userId,
+      mode,
+    )
+  } catch {
+    return failure("Could not load website billing.", 500)
   }
 
-  const subscriptionsByWebsite = new Map(
-    linksResult.data.map(({ website_id, stripe_subscription_id }) => [
-      website_id,
-      stripe_subscription_id,
-    ]),
-  )
-
-  const authorizedCustomers = new Set(
-    contactsResult.data.map(({ stripe_customer_id }) => stripe_customer_id),
-  )
+  const { links, legacyCustomers } = connectionData
 
   const billing = await Promise.all(
-    websites.flatMap(({ id, name }) => {
-      const subscriptionId = subscriptionsByWebsite.get(id)
-      if (!subscriptionId) return []
+    accessibleWebsites.flatMap(({ id, name }) => {
+      const link = links.get(id)
+      if (!link) return []
 
       return [
         (async () => {
           const subscription = await getWebsiteSubscription(
             stripe,
-            subscriptionId,
+            link,
             mode === "live",
-          ).catch(() => null)
+          ).catch((error: unknown) => {
+            console.error("Website subscription lookup failed", {
+              websiteId: id,
+              code:
+                error instanceof Stripe.errors.StripeError
+                  ? error.code
+                  : undefined,
+            })
+
+            return null
+          })
 
           return {
             websiteId: id,
@@ -161,7 +183,12 @@ export async function GET(request: Request) {
             status: subscription?.status ?? "unavailable",
             canUpdatePaymentMethod:
               subscription !== null &&
-              authorizedCustomers.has(subscription.customerId),
+              canManageBillingCustomer(
+                link,
+                subscription.customerId,
+                userId,
+                legacyCustomers,
+              ),
           }
         })(),
       ]
@@ -176,20 +203,38 @@ export async function POST(request: Request) {
   if (context instanceof Response) return context
 
   const { viewer, admin, stripe, userId, mode } = context
+
   const payload = (await request.json().catch(() => null)) as {
     websiteId?: unknown
   } | null
+
   const websiteId = payload?.websiteId
 
   if (typeof websiteId !== "string" || !uuidPattern.test(websiteId)) {
-    return new Response("Invalid website.", { status: 400 })
+    return failure("Invalid website.", 400)
   }
 
   const portalUrl = process.env.WM_PORTAL_URL?.trim()
-  if (!portalUrl) {
-    return new Response("Billing return URL is not configured.", {
-      status: 503,
-    })
+
+  let returnUrl: string
+
+  try {
+    if (!portalUrl) throw new Error("Missing return URL.")
+
+    const parsed = new URL(portalUrl)
+
+    if (
+      !["http:", "https:"].includes(parsed.protocol) ||
+      parsed.username ||
+      parsed.password ||
+      (mode === "live" && parsed.protocol !== "https:")
+    ) {
+      throw new Error("Invalid return URL.")
+    }
+
+    returnUrl = new URL("/", parsed).href
+  } catch {
+    return failure("Billing return URL is not configured correctly.", 503)
   }
 
   const { data: website, error: websiteError } = await viewer
@@ -199,65 +244,58 @@ export async function POST(request: Request) {
     .maybeSingle()
 
   if (websiteError) {
-    return new Response("Could not check website access.", { status: 500 })
+    return failure("Could not check website access.", 500)
   }
 
   if (!website) {
-    return new Response("Billing unavailable for this website.", {
-      status: 404,
-    })
+    return failure("Billing unavailable for this website.", 404)
   }
 
-  const { data: link, error: linkError } = await admin
-    .from("wm_website_billing")
-    .select("stripe_subscription_id")
-    .eq("website_id", website.id)
-    .maybeSingle()
+  let connectionData: Awaited<ReturnType<typeof loadWebsiteBillingLinks>>
 
-  if (linkError) {
-    return new Response("Could not load website billing.", { status: 500 })
+  try {
+    connectionData = await loadWebsiteBillingLinks(
+      admin,
+      [website.id],
+      userId,
+      mode,
+    )
+  } catch {
+    return failure("Could not load website billing.", 500)
   }
+
+  const { links, legacyCustomers } = connectionData
+  const link = links.get(website.id)
 
   if (!link) {
-    return new Response("Billing unavailable for this website.", {
-      status: 404,
-    })
+    return failure("Billing unavailable for this website.", 404)
   }
 
   try {
     const subscription = await getWebsiteSubscription(
       stripe,
-      link.stripe_subscription_id,
+      link,
       mode === "live",
     )
 
     if (!subscription) {
-      return new Response("Billing unavailable for this website.", {
-        status: 404,
-      })
+      return failure("Billing unavailable for this website.", 404)
     }
 
-    const { data: contact, error: contactError } = await admin
-      .from("wm_stripe_billing_contacts")
-      .select("user_id")
-      .eq("stripe_customer_id", subscription.customerId)
-      .eq("user_id", userId)
-      .maybeSingle()
-
-    if (contactError) {
-      return new Response("Could not check billing access.", { status: 500 })
-    }
-
-    if (!contact) {
-      return new Response(
+    if (
+      !canManageBillingCustomer(
+        link,
+        subscription.customerId,
+        userId,
+        legacyCustomers,
+      )
+    ) {
+      return failure(
         "Only the billing contact can update payment methods.",
-        {
-          status: 403,
-        },
+        403,
       )
     }
 
-    const returnUrl = new URL("/", portalUrl).href
     const session = await stripe.billingPortal.sessions.create({
       customer: subscription.customerId,
       return_url: returnUrl,
@@ -276,8 +314,7 @@ export async function POST(request: Request) {
       "Could not open Website Manager payment settings",
       error instanceof Stripe.errors.StripeError ? error.code : undefined,
     )
-    return new Response("Could not open Stripe payment settings.", {
-      status: 502,
-    })
+
+    return failure("Could not open Stripe payment settings.", 502)
   }
 }

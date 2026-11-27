@@ -42,13 +42,22 @@ export async function GET(request: Request) {
   const deliveryEnabled =
     process.env.WM_NOTIFICATION_DELIVERY_ENABLED === "true"
 
-  if (!maintenanceEnabled && !recapAutoPublishEnabled && !deliveryEnabled) {
+  const billingEnabled =
+    process.env.WM_EXTERNAL_BILLING_AUTOMATION_ENABLED === "true"
+
+  if (
+    !maintenanceEnabled &&
+    !recapAutoPublishEnabled &&
+    !deliveryEnabled &&
+    !billingEnabled
+  ) {
     return Response.json(
       {
         enabled: false,
         generated: 0,
         recapsGenerated: 0,
         recapsPublished: 0,
+        billingPeriodsGenerated: 0,
         notifications: { enabled: false },
       },
       { headers },
@@ -78,9 +87,11 @@ export async function GET(request: Request) {
   let generated = 0
   let recapsGenerated = 0
   let recapsPublished = 0
+  let billingPeriodsGenerated = 0
 
   let maintenanceFailed = false
   let recapsFailed = false
+  let billingFailed = false
 
   if (maintenanceEnabled) {
     try {
@@ -94,6 +105,23 @@ export async function GET(request: Request) {
     } catch {
       maintenanceFailed = true
       console.error("Monthly maintenance generation failed.")
+    }
+  }
+
+  if (billingEnabled) {
+    try {
+      const { data, error } = await admin.rpc(
+        "wm_generate_external_billing_periods",
+      )
+
+      if (error || !validCount(data)) {
+        throw new Error("Invalid billing generation result.")
+      }
+
+      billingPeriodsGenerated = data
+    } catch {
+      billingFailed = true
+      console.error("Outside-payment billing generation failed.")
     }
   }
 
@@ -130,8 +158,10 @@ export async function GET(request: Request) {
       generated,
       recapsGenerated,
       recapsPublished,
+      billingPeriodsGenerated,
       maintenanceFailed,
       recapsFailed,
+      billingFailed,
       notifications,
       checkedAt: new Date().toISOString(),
     }
@@ -140,7 +170,10 @@ export async function GET(request: Request) {
 
     return Response.json(result, {
       status:
-        maintenanceFailed || recapsFailed || notifications.unconfirmed > 0
+        maintenanceFailed ||
+        recapsFailed ||
+        billingFailed ||
+        notifications.unconfirmed > 0
           ? 500
           : 200,
       headers,
@@ -154,8 +187,10 @@ export async function GET(request: Request) {
         generated,
         recapsGenerated,
         recapsPublished,
+        billingPeriodsGenerated,
         maintenanceFailed,
         recapsFailed,
+        billingFailed,
       },
       { status: 500, headers },
     )

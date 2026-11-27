@@ -21,8 +21,8 @@ export default function CheckoutReturnPage() {
           payment.
         </p>
 
-        <Link href="/maintenance" className={linkButtonClass}>
-          Back to website maintenance
+        <Link href="/" className={linkButtonClass}>
+          Back to Website Maintenance
         </Link>
       </section>
     </main>

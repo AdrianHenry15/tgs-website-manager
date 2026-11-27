@@ -73,8 +73,11 @@ export async function syncStripeInvoice(
   if (!invoice.status || invoice.status === "draft") return
 
   if (
-    invoice.billing_reason !== "subscription_create" &&
-    invoice.billing_reason !== "subscription_cycle"
+    ![
+      "subscription_create",
+      "subscription_cycle",
+      "subscription_update",
+    ].includes(invoice.billing_reason ?? "")
   ) {
     throw new Error("Invoice requires review: unsupported billing reason.")
   }
@@ -174,6 +177,12 @@ export async function syncStripeInvoice(
   })
 
   if (result.error) {
+    console.error("Stripe invoice storage failed", {
+      invoiceId: invoice.id,
+      code: result.error.code,
+      message: result.error.message,
+    })
+
     throw new Error("Could not store Stripe invoice.")
   }
 }

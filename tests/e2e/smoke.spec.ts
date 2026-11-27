@@ -43,21 +43,20 @@ test("billing rejects requests without a session", async ({ request }) => {
   expect(portal.status()).toBe(401)
 })
 
-test("the Stripe webhook accepts an intact signature and rejects a changed body", async ({
+test("the Stripe webhook validates signatures for ignored events", async ({
   request,
 }) => {
   const stripe = new Stripe("sk_test_playwright_local_only")
   const payload = JSON.stringify({
-    id: "evt_playwright_checkout",
+    id: "evt_playwright_signature",
     object: "event",
+    created: Math.floor(Date.now() / 1000),
     livemode: false,
-    type: "checkout.session.completed",
+    type: "payment_intent.created",
     data: {
       object: {
-        id: "cs_test_playwright",
-        mode: "subscription",
-        payment_status: "paid",
-        metadata: { source: "tgs_website_manager" },
+        id: "pi_playwright_signature",
+        object: "payment_intent",
       },
     },
   })
@@ -81,7 +80,7 @@ test("the Stripe webhook accepts an intact signature and rejects a changed body"
 
   const changed = await request.post("/api/stripe/webhook", {
     headers,
-    data: payload.replace('"paid"', '"unpaid"'),
+    data: `${payload}\n`,
   })
   expect(changed.status()).toBe(400)
 })

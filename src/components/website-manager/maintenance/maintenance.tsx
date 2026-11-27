@@ -11,6 +11,7 @@ import { useMaintenance } from "./use-maintenance"
 import { StatusBadge } from "../status-ui"
 import { ActivityForm } from "./activity-form"
 import { TemplateManager } from "./template-manager"
+import { ActivityEditor } from "./activity-editor"
 
 function currentMonth() {
   const parts = new Intl.DateTimeFormat("en-US", {
@@ -183,7 +184,7 @@ export function Maintenance() {
         <p role="status" className="text-sm text-muted">
           Loading maintenance…
         </p>
-      ) : (
+      ) : loadError ? null : (
         <>
           <div className="flex flex-wrap gap-3">
             <StatusBadge
@@ -268,6 +269,13 @@ export function Maintenance() {
                         </button>
                       )}
                     </div>
+                    {canManage && activity.source === "one_off" && (
+                      <ActivityEditor
+                        activity={activity}
+                        disabled={savingId !== null}
+                        onSaved={refresh}
+                      />
+                    )}
                   </li>
                 )
               })}

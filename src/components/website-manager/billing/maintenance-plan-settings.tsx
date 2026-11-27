@@ -13,7 +13,6 @@ import {
   readAmountCents,
   type MaintenancePlan,
 } from "./maintenance-plan-form"
-import { TestMaintenanceCheckout } from "./test-maintenance-checkout"
 
 type Website = {
   id: string
@@ -264,9 +263,6 @@ export function MaintenancePlanSettings() {
               plan={plan}
               onSaved={saved}
             />
-          )}
-          {canManage && plan && (
-            <TestMaintenanceCheckout key={selectedId} websiteId={selectedId} />
           )}
         </>
       )}

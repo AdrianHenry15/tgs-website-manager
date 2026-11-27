@@ -6,17 +6,12 @@ import { supabase } from "@/lib/supabase"
 import { AuthScreen } from "./auth-screen"
 import { secondaryButtonClass } from "./styles"
 import { Requests } from "./requests/requests"
-import { AccountSettings } from "./account-settings"
 import { Brand } from "./auth-ui"
-import { RemoveWebsiteAccess } from "./remove-website-access"
-import { WebsiteBilling } from "./website-billing"
 import { Maintenance } from "./maintenance/maintenance"
 import { Releases } from "./releases/releases"
 import { Recaps } from "./recaps/recaps"
 import { Dashboard } from "./dashboard/dashboard"
-import { MaintenancePlanSettings } from "./billing/maintenance-plan-settings"
-import { MaintenanceLedger } from "./billing/maintenance-ledger"
-import { StripeInvoiceHistory } from "./billing/stripe-invoice-history"
+import { AccountPanel } from "./account-panel"
 
 const workspaceSections = [
   { id: "overview", label: "Overview" },
@@ -121,6 +116,13 @@ function Workspace({ user }: { user: Session["user"] }) {
       <header className="mb-8 flex flex-wrap items-center justify-between gap-4 border-b border-border pb-5">
         <Brand />
 
+        <div className="min-w-0 sm:ml-auto">
+          <p className="text-xs text-muted">Signed in as</p>
+          <p className="max-w-72 truncate text-sm font-medium text-foreground">
+            {user.email ?? "Email unavailable"}
+          </p>
+        </div>
+
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
@@ -147,16 +149,7 @@ function Workspace({ user }: { user: Session["user"] }) {
         </p>
       )}
 
-      {accountOpen && (
-        <div id="workspace-account" className="mb-6 space-y-4">
-          <AccountSettings email={user.email ?? ""} />
-          <MaintenancePlanSettings />
-          <MaintenanceLedger />
-          <StripeInvoiceHistory />
-          <WebsiteBilling />
-          <RemoveWebsiteAccess />
-        </div>
-      )}
+      {accountOpen && <AccountPanel email={user.email ?? ""} />}
 
       <nav
         aria-label="Workspace sections"

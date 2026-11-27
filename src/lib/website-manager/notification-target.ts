@@ -6,11 +6,16 @@ export type NotificationTargetInput = {
     | "monthly_recap"
     | "request_update"
     | "request_reply"
+    | "request_received"
+    | "request_created_admin"
+    | "request_input_needed"
   website_id: string
   recipient_id: string
   release_id: string | null
   recap_id: string | null
   update_id: string | null
+  request_id: string | null
+  request_status: string | null
 }
 
 type NotificationContent = {
@@ -19,32 +24,42 @@ type NotificationContent = {
   destination: URL
 }
 
+async function isManager(
+  admin: SupabaseClient,
+  notification: NotificationTargetInput,
+) {
+  const website = await admin
+    .from("wm_websites")
+    .select("organization_id")
+    .eq("id", notification.website_id)
+    .maybeSingle()
+
+  if (website.error) throw new Error("Website lookup failed.")
+  if (!website.data) return false
+
+  const manager = await admin
+    .from("organization_members")
+    .select("user_id")
+    .eq("organization_id", website.data.organization_id)
+    .eq("user_id", notification.recipient_id)
+    .eq("status", "active")
+    .in("role", ["owner", "admin"])
+    .maybeSingle()
+
+  if (manager.error) throw new Error("Manager lookup failed.")
+
+  return Boolean(manager.data)
+}
+
 async function canReceive(
   admin: SupabaseClient,
   notification: NotificationTargetInput,
 ) {
-  if (notification.event_type === "request_reply") {
-    const website = await admin
-      .from("wm_websites")
-      .select("organization_id")
-      .eq("id", notification.website_id)
-      .maybeSingle()
-
-    if (website.error) throw new Error("Website lookup failed.")
-    if (!website.data) return false
-
-    const manager = await admin
-      .from("organization_members")
-      .select("user_id")
-      .eq("organization_id", website.data.organization_id)
-      .eq("user_id", notification.recipient_id)
-      .eq("status", "active")
-      .in("role", ["owner", "admin"])
-      .maybeSingle()
-
-    if (manager.error) throw new Error("Manager lookup failed.")
-
-    return Boolean(manager.data)
+  if (
+    notification.event_type === "request_reply" ||
+    notification.event_type === "request_created_admin"
+  ) {
+    return isManager(admin, notification)
   }
 
   const membership = await admin
@@ -54,9 +69,18 @@ async function canReceive(
     .eq("user_id", notification.recipient_id)
     .maybeSingle()
 
-  if (membership.error) throw new Error("Membership lookup failed.")
+  if (membership.error) {
+    throw new Error("Membership lookup failed.")
+  }
 
-  return Boolean(membership.data)
+  if (membership.data) return true
+
+  // Managers can receive confirmation for their own submitted requests.
+  if (notification.event_type === "request_received") {
+    return isManager(admin, notification)
+  }
+
+  return false
 }
 
 export async function getNotificationTarget(
@@ -139,6 +163,65 @@ export async function getNotificationTarget(
     return {
       subject: `TGS Website Manager — your ${month} recap`,
       text: `Your website maintenance recap for ${month} is ready. Sign in to see completed work, outstanding items, and website updates.`,
+      destination,
+    }
+  }
+
+  if (
+    notification.event_type === "request_received" ||
+    notification.event_type === "request_created_admin" ||
+    notification.event_type === "request_input_needed"
+  ) {
+    if (!notification.request_id) return null
+
+    const { data: ticket, error } = await admin
+      .from("wm_requests")
+      .select("id, title, submitted_by, status")
+      .eq("id", notification.request_id)
+      .eq("website_id", notification.website_id)
+      .is("deleted_at", null)
+      .is("purge_started_at", null)
+      .maybeSingle()
+
+    if (error) throw new Error("Request lookup failed.")
+    if (!ticket) return null
+
+    destination.searchParams.set("requestId", ticket.id)
+
+    if (notification.event_type === "request_created_admin") {
+      return {
+        subject: "TGS Website Manager — new request",
+        text: `A new website request is ready to review.\n\n${ticket.title}\n\nSign in to review the details.`,
+        destination,
+      }
+    }
+
+    if (ticket.submitted_by !== notification.recipient_id) {
+      return null
+    }
+
+    if (notification.event_type === "request_received") {
+      return {
+        subject: "TGS Website Manager — request received",
+        text: `We received your website request.\n\n${ticket.title}\n\nSign in to follow its progress or add a message.`,
+        destination,
+      }
+    }
+
+    // Do not send an outdated request for input.
+    if (
+      ticket.status !== notification.request_status ||
+      !["waiting_on_client", "ready_for_review"].includes(ticket.status)
+    ) {
+      return null
+    }
+
+    return {
+      subject: "TGS Website Manager — your input is needed",
+      text:
+        ticket.status === "ready_for_review"
+          ? "Your website request is ready for review. Sign in to review the details and respond."
+          : "We need your input on a website request. Sign in to read the latest details and respond.",
       destination,
     }
   }

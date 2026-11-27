@@ -1,129 +1,82 @@
-import { requestColumns } from "@/components/website-manager/requests/request-columns"
-import { sendRequestEmails } from "@/components/website-manager/requests/request-email"
-import { createClient } from "@supabase/supabase-js"
-
-type RequestBody = {
-  websiteId?: unknown
-  kind?: unknown
-  title?: unknown
-  description?: unknown
-  pageUrl?: unknown
-}
+import { randomUUID } from "node:crypto"
+import {
+  getRequestViewer,
+  requestActionError,
+} from "@/lib/website-manager/request-api"
 
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export async function POST(request: Request) {
-  const token = request.headers
-    .get("authorization")
-    ?.match(/^Bearer ([^\s]+)$/i)?.[1]
+  const viewer = await getRequestViewer(request)
+  if (viewer instanceof Response) return viewer
 
-  if (!token) {
-    return Response.json(
-      { error: "Sign in again to submit a request." },
-      { status: 401 },
-    )
-  }
+  const body = (await request.json().catch(() => null)) as {
+    requestId?: unknown
+    websiteId?: unknown
+    kind?: unknown
+    title?: unknown
+    description?: unknown
+    pageUrl?: unknown
+  } | null
 
-  const body = (await request.json().catch(() => null)) as RequestBody | null
+  const requestId =
+    body?.requestId === undefined ? randomUUID() : body.requestId
 
-  if (!body || typeof body !== "object") {
-    return Response.json({ error: "Invalid request." }, { status: 400 })
-  }
-
-  const { websiteId, kind } = body
-  const title = typeof body.title === "string" ? body.title.trim() : ""
+  const websiteId = body?.websiteId
+  const kind = body?.kind
+  const title = typeof body?.title === "string" ? body.title.trim() : ""
   const description =
-    typeof body.description === "string" ? body.description.trim() : ""
-  const pageUrl = typeof body.pageUrl === "string" ? body.pageUrl.trim() : ""
+    typeof body?.description === "string" ? body.description.trim() : ""
+  const pageUrl = typeof body?.pageUrl === "string" ? body.pageUrl.trim() : ""
 
   if (
+    typeof requestId !== "string" ||
+    !uuidPattern.test(requestId) ||
     typeof websiteId !== "string" ||
     !uuidPattern.test(websiteId) ||
+    (kind !== "bug" && kind !== "change") ||
     !title ||
+    title.length > 160 ||
     !description ||
-    (kind !== "bug" && kind !== "change")
+    description.length > 5000 ||
+    pageUrl.length > 2048
   ) {
     return Response.json(
-      {
-        error:
-          "Choose a website and request type, then enter a title and description.",
-      },
+      { error: "Enter valid website request details." },
       { status: 400 },
     )
   }
 
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
-    {
-      global: { headers: { Authorization: `Bearer ${token}` } },
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-        detectSessionInUrl: false,
-      },
-    },
-  )
+  if (pageUrl) {
+    try {
+      const url = new URL(pageUrl)
 
-  const { data: auth, error: authError } = await supabase.auth.getUser(token)
-
-  if (authError || !auth.user) {
-    return Response.json(
-      { error: "Sign in again to submit a request." },
-      { status: 401 },
-    )
+      if (
+        !["http:", "https:"].includes(url.protocol) ||
+        url.username ||
+        url.password
+      ) {
+        throw new Error("Invalid page URL.")
+      }
+    } catch {
+      return Response.json(
+        { error: "Enter a valid HTTP or HTTPS page URL." },
+        { status: 400 },
+      )
+    }
   }
 
-  const { data: website, error: websiteError } = await supabase
-    .from("wm_websites")
-    .select("name")
-    .eq("id", websiteId)
-    .maybeSingle()
+  const { data, error } = await viewer.rpc("wm_submit_request", {
+    p_request_id: requestId,
+    p_website_id: websiteId,
+    p_kind: kind,
+    p_title: title,
+    p_description: description,
+    p_page_url: pageUrl || null,
+  })
 
-  if (websiteError) {
-    console.error("Could not read request website", { code: websiteError.code })
-    return Response.json(
-      { error: "Could not load the website. Try again." },
-      { status: 500 },
-    )
-  }
+  if (error) return requestActionError(error)
 
-  if (!website) {
-    return Response.json(
-      { error: "This website is unavailable to your account." },
-      { status: 403 },
-    )
-  }
-
-  const { data: savedRequest, error: saveError } = await supabase
-    .from("wm_requests")
-    .insert({
-      website_id: websiteId,
-      kind,
-      title,
-      description,
-      page_url: pageUrl || null,
-    })
-    .select(requestColumns)
-    .single()
-
-  if (saveError || !savedRequest) {
-    console.error("Could not save website request", { code: saveError?.code })
-    return Response.json(
-      { error: "Could not confirm the save. Refresh before submitting again." },
-      { status: saveError?.code === "42501" ? 403 : 500 },
-    )
-  }
-
-  const emailStatus = auth.user.email
-    ? await sendRequestEmails({
-        requestId: savedRequest.id,
-        title: savedRequest.title,
-        websiteName: website.name,
-        clientEmail: auth.user.email,
-      })
-    : "disabled"
-
-  return Response.json({ request: savedRequest, emailStatus }, { status: 201 })
+  return Response.json(data, { status: 201 })
 }

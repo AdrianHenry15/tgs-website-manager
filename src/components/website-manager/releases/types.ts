@@ -30,6 +30,7 @@ export const releaseColumns = [
   "status",
   "client_visible",
   "source",
+  "screenshot_path",
   "created_at",
   "updated_at",
 ].join(",")

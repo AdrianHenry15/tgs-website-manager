@@ -65,6 +65,15 @@ type WebsiteIdRow = {
   website_id: string
 }
 
+type RequestSubmission = {
+  requestId: string
+  websiteId: string
+  kind: RequestKind
+  title: string
+  description: string
+  pageUrl: string
+}
+
 function matchesRequestView(
   status: string,
   view: Exclude<RequestView, "trash">,
@@ -98,6 +107,9 @@ export function Requests({ viewerId }: { viewerId: string }) {
   const [notice, setNotice] = useState("")
   const [linkedRequestId, setLinkedRequestId] = useState<string | null>(null)
   const [selectedWebsiteId, setSelectedWebsiteId] = useState("")
+
+  const pendingSubmission = useRef<RequestSubmission | null>(null)
+  const submittingRequest = useRef(false)
 
   useEffect(() => {
     let active = true
@@ -174,21 +186,30 @@ export function Requests({ viewerId }: { viewerId: string }) {
 
   async function submitRequest(event: React.ChangeEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (saving) return
+    if (submittingRequest.current) return
 
     const form = event.currentTarget
     const fields = new FormData(form)
+
+    const websiteId = String(fields.get("websiteId") ?? "")
     const title = String(fields.get("title") ?? "").trim()
     const description = String(fields.get("description") ?? "").trim()
-    const websiteId = String(fields.get("websiteId") ?? "")
     const pageUrl = String(fields.get("pageUrl") ?? "").trim()
     const kind = fields.get("kind")
 
     setActionError("")
     setNotice("")
 
-    if (!websiteId || !title || !description) {
-      setActionError("Choose a website and enter a title and description.")
+    if (
+      !websites.some((website) => website.id === websiteId) ||
+      !title ||
+      title.length > 160 ||
+      !description ||
+      description.length > 5000
+    ) {
+      setActionError(
+        "Choose an available website, enter a title up to 160 characters, and a description up to 5,000.",
+      )
       return
     }
 
@@ -197,16 +218,66 @@ export function Requests({ viewerId }: { viewerId: string }) {
       return
     }
 
+    if (pageUrl) {
+      try {
+        const url = new URL(pageUrl)
+
+        if (
+          pageUrl.length > 2048 ||
+          !["http:", "https:"].includes(url.protocol) ||
+          url.username ||
+          url.password
+        ) {
+          throw new Error("Invalid page URL.")
+        }
+      } catch {
+        setActionError("Enter a valid HTTP or HTTPS page URL.")
+        return
+      }
+    }
+
+    const previous = pendingSubmission.current
+
+    if (
+      previous &&
+      (previous.websiteId !== websiteId ||
+        previous.kind !== kind ||
+        previous.title !== title ||
+        previous.description !== description ||
+        previous.pageUrl !== pageUrl)
+    ) {
+      setActionError(
+        "The previous submission has not been confirmed. Restore its original details to retry, or reload and check the request list before starting another request.",
+      )
+      return
+    }
+
+    submittingRequest.current = true
     setSaving(true)
 
     try {
       const { data, error: sessionError } = await supabase.auth.getSession()
+
       const token = data.session?.access_token
 
       if (sessionError || !token) {
-        setActionError("Sign in again to submit a request.")
+        setActionError(
+          "Sign in again to submit a request. If you already attempted this submission, check the request list after signing in.",
+        )
         return
       }
+
+      const submission: RequestSubmission = pendingSubmission.current ?? {
+        requestId: crypto.randomUUID(),
+        websiteId,
+        kind,
+        title,
+        description,
+        pageUrl,
+      }
+
+      // Keep this exact submission until its outcome is confirmed.
+      pendingSubmission.current = submission
 
       const response = await fetch("/api/requests", {
         method: "POST",
@@ -214,43 +285,77 @@ export function Requests({ viewerId }: { viewerId: string }) {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ websiteId, kind, title, description, pageUrl }),
+        body: JSON.stringify(submission),
       })
 
-      const result = (await response.json()) as {
+      const result = (await response.json().catch(() => null)) as {
         request?: WebsiteRequest
-        emailStatus?: "accepted" | "disabled" | "unconfirmed"
+        emailStatus?:
+          | "accepted"
+          | "disabled"
+          | "unconfirmed"
+          | "queued"
+          | "skipped"
         error?: string
+      } | null
+
+      if (!response.ok) {
+        if (response.status === 400) {
+          // Validation errors do not commit the database transaction.
+          pendingSubmission.current = null
+          setActionError(result?.error ?? "Check the request details.")
+        } else {
+          setActionError(
+            `${
+              result?.error ?? "Could not confirm the submission."
+            } Retry with the same details. The retry will reuse the same request ID.`,
+          )
+        }
+
+        return
       }
 
-      if (!response.ok || !result.request) {
+      const savedRequest = result?.request
+
+      if (
+        !savedRequest ||
+        savedRequest.id !== submission.requestId ||
+        savedRequest.website_id !== submission.websiteId
+      ) {
         setActionError(
-          result.error ??
-            "Could not confirm the save. Refresh before submitting again.",
+          "Could not confirm the submission. Retry with the same details to check the same request ID.",
         )
         return
       }
 
-      const savedRequest = result.request
+      pendingSubmission.current = null
+
       setSelectedWebsiteId(savedRequest.website_id)
 
-      setRequests((current) => [savedRequest, ...current])
-      setView("open")
+      setRequests((current) => [
+        savedRequest,
+        ...current.filter((item) => item.id !== savedRequest.id),
+      ])
+
+      setView(savedRequest.status === "live" ? "live" : "open")
       setKindFilter("all")
       form.reset()
 
       const screenshotHint = "Open Screenshot on the ticket to attach an image."
 
       setNotice(
-        result.emailStatus === "unconfirmed"
-          ? `Request saved. We couldn’t confirm the notification emails. ${screenshotHint}`
-          : `Request submitted. ${screenshotHint}`,
+        result?.emailStatus === "queued"
+          ? `Request saved. Notification emails are queued. ${screenshotHint}`
+          : result?.emailStatus === "unconfirmed"
+            ? `Request saved. We couldn’t confirm the notification emails. ${screenshotHint}`
+            : `Request saved. ${screenshotHint}`,
       )
     } catch {
       setActionError(
-        "Could not confirm the save. Refresh before submitting again.",
+        "Could not confirm the submission. Retry with the same details to reuse the same request ID. If you reload first, check the request list before submitting again.",
       )
     } finally {
+      submittingRequest.current = false
       setSaving(false)
     }
   }

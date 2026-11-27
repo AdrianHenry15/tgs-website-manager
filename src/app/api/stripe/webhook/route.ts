@@ -153,6 +153,9 @@ export async function POST(request: Request) {
           console.error("Could not save subscription event", {
             eventId: event.id,
             code: error.code,
+            message: error.message,
+            details: error.details,
+            hint: error.hint,
           })
 
           throw new Error("Subscription event storage failed.")

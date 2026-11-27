@@ -118,7 +118,10 @@ export async function deliverReleaseNotifications(
   }
 
   async function deliver(notification: Notification): Promise<Outcome> {
-    if (notification.actor_id === notification.recipient_id) {
+    if (
+      notification.actor_id === notification.recipient_id &&
+      notification.event_type !== "request_received"
+    ) {
       await finish(notification, "skipped", "self_notification")
       return "skipped"
     }
